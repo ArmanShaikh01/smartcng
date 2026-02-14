@@ -1,5 +1,6 @@
 // Authentication helper functions
 import {
+    getAuth,
     RecaptchaVerifier,
     signInWithPhoneNumber,
     signOut as firebaseSignOut
@@ -23,7 +24,10 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
     }
 
     // Create new RecaptchaVerifier with correct Firebase v9+ syntax
-    window.recaptchaVerifier = new RecaptchaVerifier(containerId, {
+    // Use getAuth() to ensure we have the auth instance
+    const authInstance = getAuth();
+
+    window.recaptchaVerifier = new RecaptchaVerifier(authInstance, containerId, {
         size: 'invisible',
         callback: (response) => {
             // reCAPTCHA solved, allow signInWithPhoneNumber
@@ -34,7 +38,7 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
             console.log('reCAPTCHA expired');
             window.recaptchaVerifier = null;
         }
-    }, auth);
+    });
 
     return window.recaptchaVerifier;
 };
