@@ -29,6 +29,25 @@ const StationManagement = () => {
         fetchStations();
     }, []);
 
+    // Generate next station ID
+    const generateStationId = () => {
+        if (stations.length === 0) {
+            return 'STATION_001';
+        }
+
+        // Extract numeric parts from existing station IDs
+        const numericIds = stations
+            .map(s => {
+                const match = s.stationId.match(/\d+/);
+                return match ? parseInt(match[0]) : 0;
+            })
+            .filter(n => !isNaN(n));
+
+        const maxId = Math.max(...numericIds, 0);
+        const nextId = maxId + 1;
+        return `STATION_${String(nextId).padStart(3, '0')}`;
+    };
+
     const fetchStations = async () => {
         try {
             const stationsSnapshot = await getDocs(collection(db, COLLECTIONS.STATIONS));
@@ -124,12 +143,70 @@ const StationManagement = () => {
         setShowForm(true);
     };
 
-    const handleMapLocationSelect = (lat, lng) => {
-        setFormData({
-            ...formData,
+    const handleMapLocationSelect = async (lat, lng, placeInfo = null) => {
+        // Update coordinates
+        setFormData(prev => ({
+            ...prev,
             latitude: lat,
             longitude: lng
-        });
+        }));
+
+        // If place info is provided (from map click on a place), use it
+        if (placeInfo) {
+            setFormData(prev => ({
+                ...prev,
+                name: placeInfo.name || prev.name,
+                address: placeInfo.address || prev.address
+            }));
+            return;
+        }
+
+        // Otherwise, do reverse geocoding
+        try {
+            const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
+            const response = await fetch(
+                `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
+            );
+            const data = await response.json();
+
+            if (data.results && data.results.length > 0) {
+                const result = data.results[0];
+
+                // Try to find a good name from the results
+                let stationName = '';
+                let fullAddress = result.formatted_address;
+
+                // Look for point of interest, establishment, or gas station
+                const nameResult = data.results.find(r =>
+                    r.types.includes('point_of_interest') ||
+                    r.types.includes('establishment') ||
+                    r.types.includes('gas_station')
+                );
+
+                if (nameResult && nameResult.name) {
+                    stationName = nameResult.name;
+                } else {
+                    // Extract locality/area name from address components
+                    const locality = result.address_components.find(c =>
+                        c.types.includes('locality') || c.types.includes('sublocality')
+                    );
+                    if (locality) {
+                        stationName = `CNG Station - ${locality.long_name}`;
+                    } else {
+                        stationName = 'CNG Station';
+                    }
+                }
+
+                setFormData(prev => ({
+                    ...prev,
+                    name: stationName,
+                    address: fullAddress
+                }));
+            }
+        } catch (error) {
+            console.error('Error fetching address:', error);
+            // Don't show error to user, just log it
+        }
     };
 
     const handleDelete = async (stationId) => {
@@ -148,7 +225,7 @@ const StationManagement = () => {
 
     const resetForm = () => {
         setFormData({
-            stationId: '',
+            stationId: generateStationId(),
             name: '',
             address: '',
             latitude: '',
@@ -165,13 +242,29 @@ const StationManagement = () => {
         setLoading(false);
     };
 
+    const handleAddNewStation = () => {
+        setShowForm(true);
+        setFormData({
+            stationId: generateStationId(),
+            name: '',
+            address: '',
+            latitude: '',
+            longitude: '',
+            checkInRadius: 15,
+            maxPhysicalVehicles: 10,
+            graceWindowMinutes: 5,
+            ownerPhone: '',
+            ownerName: ''
+        });
+    };
+
     return (
         <div className="station-management">
             <div className="management-header">
                 <h2>Station Management</h2>
                 <button
                     type="button"
-                    onClick={() => setShowForm(!showForm)}
+                    onClick={() => showForm ? resetForm() : handleAddNewStation()}
                     className="btn btn-primary"
                 >
                     {showForm ? 'Cancel' : '+ Add New Station'}
@@ -191,8 +284,11 @@ const StationManagement = () => {
                                 value={formData.stationId}
                                 onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
                                 required
-                                placeholder="station_001"
+                                placeholder="STATION_001"
+                                disabled={!editingStation}
+                                style={{ backgroundColor: !editingStation ? '#f3f4f6' : 'white' }}
                             />
+                            {!editingStation && <small>Auto-generated unique ID</small>}
                         </div>
 
                         <div className="form-group">
@@ -205,6 +301,7 @@ const StationManagement = () => {
                                 required
                                 placeholder="CNG Station - Andheri"
                             />
+                            {formData.name && formData.latitude && <small style={{ color: '#10b981' }}>✓ Auto-filled from map (editable)</small>}
                         </div>
 
                         <div className="form-group full-width">
@@ -217,6 +314,7 @@ const StationManagement = () => {
                                 required
                                 placeholder="Andheri West, Mumbai, Maharashtra"
                             />
+                            {formData.address && formData.latitude && <small style={{ color: '#10b981' }}>✓ Auto-filled from map (editable)</small>}
                         </div>
 
                         {/* Map Picker Toggle */}
