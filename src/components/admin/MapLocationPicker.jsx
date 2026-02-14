@@ -76,7 +76,15 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
         setMapLoadError(error);
     };
 
+    const handleLoadSuccess = () => {
+        console.log('Google Maps loaded successfully!');
+    };
+
     const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
+
+    console.log('MapLocationPicker - API Key present:', !!apiKey);
+    console.log('MapLocationPicker - Current position:', { latitude, longitude });
+    console.log('MapLocationPicker - Marker position:', markerPosition);
 
     if (!apiKey) {
         return (
@@ -124,6 +132,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
 
             <LoadScript
                 googleMapsApiKey={apiKey}
+                onLoad={handleLoadSuccess}
                 onError={handleLoadError}
                 loadingElement={<div className="map-loading">Loading map...</div>}
             >

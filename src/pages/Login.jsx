@@ -204,7 +204,7 @@ const Login = () => {
                                 value={phoneNumber}
                                 onChange={(e) => setPhoneNumber(e.target.value)}
                                 required
-                                disabled={loading}
+                                disabled={formLoading}
                             />
                             <small className="form-hint">
                                 Enter 10-digit mobile number (country code +91 will be added automatically)
@@ -213,10 +213,12 @@ const Login = () => {
 
                         <button
                             type="submit"
-                            className="btn btn-primary btn-block"
-                            disabled={loading}
+                            className={`btn btn-primary btn-block ${formLoading ? 'btn-loading' : ''}`}
+                            disabled={formLoading}
                         >
-                            {loading ? 'Sending...' : 'Send OTP'}
+                            <span className={formLoading ? 'btn-loading-text' : ''}>
+                                {formLoading ? 'Sending...' : 'Send OTP'}
+                            </span>
                         </button>
                     </form>
                 ) : step === 'otp' ? (

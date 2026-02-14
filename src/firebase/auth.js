@@ -23,6 +23,12 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
         window.recaptchaVerifier = null;
     }
 
+    // Clear the container DOM to ensure clean slate
+    const container = document.getElementById(containerId);
+    if (container) {
+        container.innerHTML = '';
+    }
+
     // Create new RecaptchaVerifier with correct Firebase v9+ syntax
     // Use getAuth() to ensure we have the auth instance
     const authInstance = getAuth();
