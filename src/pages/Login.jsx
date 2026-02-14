@@ -36,14 +36,24 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            // Validate phone number format
-            if (!phoneNumber.startsWith('+')) {
-                setError('Phone number must include country code (e.g., +91)');
+            // Auto-add +91 if phone number doesn't start with +
+            let formattedPhone = phoneNumber.trim();
+            if (!formattedPhone.startsWith('+')) {
+                // Remove any leading zeros or spaces
+                formattedPhone = formattedPhone.replace(/^0+/, '');
+                // Add +91 for Indian numbers
+                formattedPhone = '+91' + formattedPhone;
+            }
+
+            // Validate phone number length (should be 10 digits after +91)
+            const digitsOnly = formattedPhone.replace(/\D/g, '');
+            if (digitsOnly.length < 10) {
+                setError('Please enter a valid 10-digit phone number');
                 setFormLoading(false);
                 return;
             }
 
-            const result = await sendOTP(phoneNumber);
+            const result = await sendOTP(formattedPhone);
             setConfirmationResult(result);
             setStep('otp');
             setFormLoading(false);
@@ -151,7 +161,14 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            const result = await sendOTP(phoneNumber);
+            // Auto-add +91 if phone number doesn't start with +
+            let formattedPhone = phoneNumber.trim();
+            if (!formattedPhone.startsWith('+')) {
+                formattedPhone = formattedPhone.replace(/^0+/, '');
+                formattedPhone = '+91' + formattedPhone;
+            }
+
+            const result = await sendOTP(formattedPhone);
             setConfirmationResult(result);
             setFormLoading(false);
         } catch (err) {
@@ -183,14 +200,14 @@ const Login = () => {
                                 type="tel"
                                 id="phone"
                                 className="input"
-                                placeholder="+91 9876543210"
+                                placeholder="9876543210"
                                 value={phoneNumber}
                                 onChange={(e) => setPhoneNumber(e.target.value)}
                                 required
                                 disabled={loading}
                             />
                             <small className="form-hint">
-                                Include country code (e.g., +91 for India)
+                                Enter 10-digit mobile number (country code +91 will be added automatically)
                             </small>
                         </div>
 
