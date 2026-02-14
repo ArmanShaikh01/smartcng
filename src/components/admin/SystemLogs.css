@@ -4,6 +4,8 @@
     border-radius: var(--radius-lg);
     padding: var(--spacing-2xl);
     box-shadow: var(--shadow-lg);
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 .logs-header {
@@ -51,11 +53,14 @@
 
 .logs-table-container {
     overflow-x: auto;
+    overflow-y: hidden;
     margin-bottom: var(--spacing-xl);
+    max-width: 100%;
 }
 
 .logs-table {
     width: 100%;
+    min-width: 800px;
     border-collapse: collapse;
     font-size: var(--text-sm);
 }

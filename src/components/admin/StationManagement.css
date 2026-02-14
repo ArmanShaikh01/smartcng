@@ -4,6 +4,11 @@
     border-radius: var(--radius-lg);
     padding: var(--spacing-2xl);
     box-shadow: var(--shadow-lg);
+    overflow-x: hidden;
+    overflow-y: visible !important;
+    max-width: 100%;
+    max-height: none !important;
+    height: auto !important;
 }
 
 .management-header {
@@ -24,6 +29,10 @@
 .station-form {
     margin-bottom: var(--spacing-2xl);
     padding: var(--spacing-2xl);
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    max-height: none !important;
+    height: auto !important;
 }
 
 .station-form h3 {
@@ -43,6 +52,12 @@
     grid-column: span 2;
 }
 
+.map-toggle-container {
+    display: flex;
+    justify-content: center;
+    margin: var(--spacing-md) 0;
+}
+
 .form-actions {
     display: flex;
     gap: var(--spacing-md);
@@ -51,8 +66,9 @@
 
 .stations-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr));
     gap: var(--spacing-lg);
+    overflow-x: hidden;
 }
 
 .station-item {

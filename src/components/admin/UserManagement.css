@@ -1,6 +1,8 @@
 /* User Management Styles */
 .user-management {
     padding: var(--spacing-xl);
+    overflow-x: hidden;
+    max-width: 100%;
 }
 
 .um-header {
@@ -37,12 +39,15 @@
 .users-table {
     background: var(--bg-primary);
     border-radius: var(--radius-lg);
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     box-shadow: var(--shadow-md);
+    max-width: 100%;
 }
 
 .users-table table {
     width: 100%;
+    min-width: 600px;
     border-collapse: collapse;
 }
 

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
+import MapLocationPicker from './MapLocationPicker';
 import './StationManagement.css';
 
 const StationManagement = () => {
@@ -10,6 +11,7 @@ const StationManagement = () => {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingStation, setEditingStation] = useState(null);
+    const [useMapPicker, setUseMapPicker] = useState(true);
     const [formData, setFormData] = useState({
         stationId: '',
         name: '',
@@ -122,6 +124,14 @@ const StationManagement = () => {
         setShowForm(true);
     };
 
+    const handleMapLocationSelect = (lat, lng) => {
+        setFormData({
+            ...formData,
+            latitude: lat,
+            longitude: lng
+        });
+    };
+
     const handleDelete = async (stationId) => {
         if (!confirm('Are you sure you want to delete this station? This action cannot be undone.')) {
             return;
@@ -151,6 +161,7 @@ const StationManagement = () => {
         });
         setEditingStation(null);
         setShowForm(false);
+        setUseMapPicker(true);
         setLoading(false);
     };
 
@@ -207,6 +218,30 @@ const StationManagement = () => {
                                 placeholder="Andheri West, Mumbai, Maharashtra"
                             />
                         </div>
+
+                        {/* Map Picker Toggle */}
+                        <div className="form-group full-width">
+                            <div className="map-toggle-container">
+                                <button
+                                    type="button"
+                                    onClick={() => setUseMapPicker(!useMapPicker)}
+                                    className="btn btn-outline btn-sm"
+                                >
+                                    {useMapPicker ? '✍️ Switch to Manual Entry' : '🗺️ Use Map Picker'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Map Picker Component */}
+                        {useMapPicker && (
+                            <div className="form-group full-width">
+                                <MapLocationPicker
+                                    latitude={parseFloat(formData.latitude) || null}
+                                    longitude={parseFloat(formData.longitude) || null}
+                                    onLocationSelect={handleMapLocationSelect}
+                                />
+                            </div>
+                        )}
 
                         <div className="form-group">
                             <label>Latitude *</label>
