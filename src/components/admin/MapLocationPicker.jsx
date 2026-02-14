@@ -14,6 +14,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
     );
     const { location, getLocation } = useGeolocation();
     const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
+    const [mapLoadError, setMapLoadError] = useState(null);
 
     const mapContainerStyle = {
         width: '100%',
@@ -70,12 +71,39 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
         }
     };
 
+    const handleLoadError = (error) => {
+        console.error('Google Maps Load Error:', error);
+        setMapLoadError(error);
+    };
+
     const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
 
     if (!apiKey) {
         return (
             <div className="map-error">
                 <p>⚠️ Google Maps API key not found. Please add VITE_GOOGLE_GEOLOCATION_API_KEY to your .env file.</p>
+            </div>
+        );
+    }
+
+    if (mapLoadError) {
+        return (
+            <div className="map-error">
+                <h4>🗺️ Map Unavailable</h4>
+                <p><strong>The Google Maps API could not be loaded.</strong></p>
+                <div className="error-details">
+                    <p>This usually means the <strong>Maps JavaScript API</strong> is not enabled for your API key.</p>
+                    <p><strong>To fix this:</strong></p>
+                    <ol>
+                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
+                        <li>Select your project</li>
+                        <li>Navigate to <strong>APIs & Services → Library</strong></li>
+                        <li>Search for <strong>"Maps JavaScript API"</strong></li>
+                        <li>Click <strong>Enable</strong></li>
+                        <li>Wait a few minutes and refresh this page</li>
+                    </ol>
+                    <p className="fallback-note">💡 <strong>In the meantime:</strong> You can still use manual latitude/longitude entry below to add station locations.</p>
+                </div>
             </div>
         );
     }
@@ -94,7 +122,11 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
                 <p className="map-hint">Click anywhere on the map to select location, or drag the marker</p>
             </div>
 
-            <LoadScript googleMapsApiKey={apiKey}>
+            <LoadScript
+                googleMapsApiKey={apiKey}
+                onError={handleLoadError}
+                loadingElement={<div className="map-loading">Loading map...</div>}
+            >
                 <GoogleMap
                     mapContainerStyle={mapContainerStyle}
                     center={mapCenter}
