@@ -1,0 +1,165 @@
+/* History Page Styles */
+.history-page {
+    min-height: 100vh;
+    background-color: var(--bg-secondary);
+}
+
+.history-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--spacing-2xl);
+}
+
+.history-header {
+    margin-bottom: var(--spacing-2xl);
+}
+
+.history-header h1 {
+    font-size: var(--text-3xl);
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+}
+
+.history-filters {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: 2px solid var(--border-color);
+    background-color: var(--bg-primary);
+    color: var(--text-secondary);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.filter-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.filter-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.bookings-list {
+    display: grid;
+    gap: var(--spacing-lg);
+}
+
+.booking-card {
+    padding: var(--spacing-xl);
+    transition: all var(--transition-fast);
+}
+
+.booking-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.booking-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.booking-vehicle {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.status-badge {
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+
+.status-badge.success {
+    background-color: rgba(34, 197, 94, 0.2);
+    color: var(--success-color);
+}
+
+.status-badge.danger {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: var(--danger-color);
+}
+
+.status-badge.warning {
+    background-color: rgba(245, 158, 11, 0.2);
+    color: var(--warning-color);
+}
+
+.status-badge.info {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: var(--primary-color);
+}
+
+.booking-details {
+    display: grid;
+    gap: var(--spacing-sm);
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: var(--spacing-sm) 0;
+}
+
+.detail-label {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+}
+
+.detail-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: var(--text-sm);
+}
+
+.detail-value.success {
+    color: var(--success-color);
+}
+
+.history-loading,
+.history-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+    gap: var(--spacing-lg);
+}
+
+.history-empty p {
+    font-size: var(--text-xl);
+    color: var(--text-secondary);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .history-content {
+        padding: var(--spacing-lg);
+    }
+
+    .history-header h1 {
+        font-size: var(--text-2xl);
+    }
+
+    .booking-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-sm);
+    }
+}
