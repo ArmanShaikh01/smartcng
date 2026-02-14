@@ -12,18 +12,30 @@ import { auth } from './config';
  * @returns {RecaptchaVerifier}
  */
 export const initRecaptcha = (containerId = 'recaptcha-container') => {
-    if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
-            size: 'invisible',
-            callback: () => {
-                // reCAPTCHA solved
-            },
-            'expired-callback': () => {
-                // Response expired
-                window.recaptchaVerifier = null;
-            }
-        });
+    // Clear existing verifier if present
+    if (window.recaptchaVerifier) {
+        try {
+            window.recaptchaVerifier.clear();
+        } catch (e) {
+            console.log('Error clearing recaptcha:', e);
+        }
+        window.recaptchaVerifier = null;
     }
+
+    // Create new RecaptchaVerifier with correct Firebase v9+ syntax
+    window.recaptchaVerifier = new RecaptchaVerifier(containerId, {
+        size: 'invisible',
+        callback: (response) => {
+            // reCAPTCHA solved, allow signInWithPhoneNumber
+            console.log('reCAPTCHA verified successfully');
+        },
+        'expired-callback': () => {
+            // Response expired, ask user to solve reCAPTCHA again
+            console.log('reCAPTCHA expired');
+            window.recaptchaVerifier = null;
+        }
+    }, auth);
+
     return window.recaptchaVerifier;
 };
 
@@ -35,10 +47,18 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
 export const sendOTP = async (phoneNumber) => {
     try {
         const appVerifier = initRecaptcha();
+
+        // Render the reCAPTCHA widget
+        await appVerifier.render();
+
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
         console.error('Error sending OTP:', error);
+        // Clear the verifier on error so it can be recreated
+        if (window.recaptchaVerifier) {
+            window.recaptchaVerifier = null;
+        }
         throw error;
     }
 };
