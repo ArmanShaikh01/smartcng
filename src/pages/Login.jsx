@@ -301,6 +301,9 @@ const Login = () => {
                         </button>
                     </form>
                 )}
+
+                {/* reCAPTCHA container - required for phone authentication */}
+                <div id="recaptcha-container"></div>
             </div>
         </div>
     );

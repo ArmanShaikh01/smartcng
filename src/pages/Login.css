@@ -106,6 +106,13 @@
     cursor: not-allowed;
 }
 
+/* reCAPTCHA container styling */
+#recaptcha-container {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--spacing-lg);
+}
+
 @media (max-width: 480px) {
     .login-container {
         padding: var(--spacing-md);
