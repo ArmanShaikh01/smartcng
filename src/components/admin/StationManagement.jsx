@@ -144,6 +144,7 @@ const StationManagement = () => {
     };
 
     const handleMapLocationSelect = async (lat, lng, placeInfo = null) => {
+        console.log('🗺️ Map clicked:', { lat, lng });
         // Update coordinates
         setFormData(prev => ({
             ...prev,
@@ -164,12 +165,14 @@ const StationManagement = () => {
         // Otherwise, do reverse geocoding
         try {
             const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
-            const response = await fetch(
-                `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`
-            );
+            console.log('🔑 API Key present:', !!apiKey);
+            const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
+            console.log('📡 Calling geocoding API...');
+            const response = await fetch(url);
             const data = await response.json();
+            console.log('📥 API Response:', data);
 
-            if (data.results && data.results.length > 0) {
+            if (data.status === 'OK' && data.results && data.results.length > 0) {
                 const result = data.results[0];
 
                 // Try to find a good name from the results
@@ -197,15 +200,20 @@ const StationManagement = () => {
                     }
                 }
 
+                console.log('✅ Auto-filling fields:', { stationName, fullAddress });
                 setFormData(prev => ({
                     ...prev,
                     name: stationName,
                     address: fullAddress
                 }));
+            } else {
+                console.error('❌ Geocoding failed:', data.status, data.error_message);
+                if (data.status === 'REQUEST_DENIED') {
+                    alert('⚠️ Geocoding API not enabled. Please enable it in Google Cloud Console or manually enter station details.');
+                }
             }
         } catch (error) {
-            console.error('Error fetching address:', error);
-            // Don't show error to user, just log it
+            console.error('❌ Error calling geocoding API:', error);
         }
     };
 
