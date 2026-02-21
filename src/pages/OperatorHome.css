@@ -1,0 +1,111 @@
+/* Operator Home Styles - Large Screen Optimized */
+.operator-home {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+}
+
+.operator-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: var(--spacing-2xl);
+}
+
+.operator-header {
+    text-align: center;
+    margin-bottom: var(--spacing-2xl);
+    padding: var(--spacing-xl);
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.operator-header h1 {
+    font-size: var(--text-4xl);
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-md);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.station-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+}
+
+.station-name {
+    font-size: var(--text-xl);
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.station-address {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+}
+
+.queue-section {
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-2xl);
+    box-shadow: var(--shadow-lg);
+}
+
+.queue-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-xl);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.queue-section-header h2 {
+    font-size: var(--text-2xl);
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.operator-loading,
+.operator-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-2xl);
+    text-align: center;
+}
+
+.operator-error h2 {
+    font-size: var(--text-3xl);
+    color: var(--danger-color);
+    margin-bottom: var(--spacing-md);
+}
+
+.operator-error p {
+    font-size: var(--text-lg);
+    color: var(--text-secondary);
+}
+
+/* Mobile responsive */
+@media (max-width: 1024px) {
+    .operator-content {
+        padding: var(--spacing-lg);
+    }
+
+    .operator-header h1 {
+        font-size: var(--text-2xl);
+    }
+
+    .queue-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--spacing-md);
+    }
+
+    .queue-section-header button {
+        width: 100%;
+    }
+}

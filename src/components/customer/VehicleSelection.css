@@ -1,0 +1,118 @@
+/* Vehicle Selection Styles */
+.vehicle-selection-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-xl);
+    background-color: var(--bg-secondary);
+}
+
+.vehicle-selection-card {
+    width: 100%;
+    max-width: 500px;
+}
+
+.vehicle-selection-card h2 {
+    font-size: var(--text-3xl);
+    margin-bottom: var(--spacing-sm);
+    color: var(--text-primary);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xl);
+}
+
+.vehicles-list {
+    margin-bottom: var(--spacing-lg);
+}
+
+.vehicles-list h3 {
+    font-size: var(--text-lg);
+    margin-bottom: var(--spacing-md);
+    color: var(--text-primary);
+}
+
+.vehicle-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.vehicle-item:hover {
+    border-color: var(--primary-color);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.vehicle-item.selected {
+    border-color: var(--primary-color);
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.1) 100%);
+}
+
+.vehicle-icon {
+    font-size: var(--text-2xl);
+}
+
+.vehicle-number {
+    flex: 1;
+    font-size: var(--text-lg);
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: 0.5px;
+}
+
+.selected-badge {
+    width: 30px;
+    height: 30px;
+    background-color: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+.add-vehicle-form {
+    padding: var(--spacing-lg);
+    background-color: var(--bg-secondary);
+    border-radius: var(--radius-lg);
+}
+
+.form-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+}
+
+.form-actions .btn {
+    flex: 1;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+    .vehicle-selection-container {
+        padding: var(--spacing-md);
+    }
+
+    .vehicle-selection-card h2 {
+        font-size: var(--text-2xl);
+    }
+
+    .vehicle-item {
+        padding: var(--spacing-md);
+    }
+
+    .form-actions {
+        flex-direction: column;
+    }
+}

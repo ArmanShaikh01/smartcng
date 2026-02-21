@@ -1,0 +1,164 @@
+/* Control Panel Styles - Large Screen Optimized */
+.control-panel {
+    background-color: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-2xl);
+    box-shadow: var(--shadow-lg);
+    margin-bottom: var(--spacing-2xl);
+}
+
+.control-panel h3 {
+    font-size: var(--text-2xl);
+    margin-bottom: var(--spacing-xl);
+    color: var(--text-primary);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.control-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-xl);
+}
+
+.control-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-2xl);
+    border: 3px solid transparent;
+    border-radius: var(--radius-xl);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    min-height: 150px;
+    position: relative;
+    overflow: hidden;
+}
+
+.control-btn:hover:not(:disabled) {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+}
+
+.control-btn:active:not(:disabled) {
+    transform: translateY(-2px);
+}
+
+.control-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: white;
+    border-color: #15803d;
+}
+
+.btn-success:hover:not(:disabled) {
+    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border-color: #b91c1c;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+.btn-next {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border-color: #1d4ed8;
+    grid-column: span 3;
+    min-height: 120px;
+}
+
+.btn-next:hover:not(:disabled) {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+}
+
+.btn-icon {
+    font-size: 3rem;
+}
+
+.btn-label {
+    font-size: var(--text-xl);
+    letter-spacing: 2px;
+}
+
+.btn-status {
+    font-size: var(--text-base);
+    padding: var(--spacing-xs) var(--spacing-md);
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-md);
+    font-weight: 600;
+}
+
+.spinner-small {
+    width: 24px;
+    height: 24px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* Pulse animation for active buttons */
+.btn-success::before,
+.btn-danger::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+    transform: translate(-50%, -50%) scale(0);
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(1.5);
+        opacity: 0;
+    }
+}
+
+/* Mobile responsive */
+@media (max-width: 1024px) {
+    .control-buttons {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+    }
+
+    .btn-next {
+        grid-column: span 1;
+    }
+
+    .control-btn {
+        min-height: 100px;
+        padding: var(--spacing-xl);
+    }
+
+    .btn-icon {
+        font-size: 2rem;
+    }
+
+    .btn-label {
+        font-size: var(--text-lg);
+    }
+}
