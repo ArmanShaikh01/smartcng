@@ -9,8 +9,17 @@ import { auth } from './config';
 
 // ─── reCAPTCHA container ──────────────────────────────────────────────────
 // ONE container element lives on document.body, outside React's virtual DOM.
-// The verifier is initialized ONCE (on Login mount) and reused across OTP
-// sends. It is only force-recreated after an error to keep a clean slate.
+//
+// Key design decision:
+//   We create the RecaptchaVerifier on Login mount but do NOT call
+//   render() / pre-fetch a token. Calling render() early generates a
+//   short-lived reCAPTCHA token; if the user takes >30s to type their
+//   number, that token is stale and Firebase creates a new session
+//   internally — causing a session mismatch that Firebase reports as
+//   auth/code-expired even when the OTP is entered immediately.
+//
+//   Let signInWithPhoneNumber() trigger the reCAPTCHA challenge itself
+//   (it always fetches a fresh token right before calling Google's API).
 // ─────────────────────────────────────────────────────────────────────────
 
 const RCAP_ID = '__rcap_widget__';
@@ -30,9 +39,10 @@ function createVerifier() {
     getFreshContainer();
     window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), RCAP_ID, {
         size: 'invisible',
-        callback: () => { /* reCAPTCHA solved automatically */ },
+        callback: () => { /* reCAPTCHA solved — signInWithPhoneNumber continues */ },
         'expired-callback': () => {
-            // Token expired — clear so next sendOTP creates a fresh one
+            // reCAPTCHA token expired between sends — clear so next sendOTP
+            // calls createVerifier() fresh (safe, OTP not sent yet at this point).
             window.recaptchaVerifier = null;
         }
     });
@@ -41,32 +51,25 @@ function createVerifier() {
 
 /**
  * Call this ONCE when the Login component mounts.
- * Creates the invisible reCAPTCHA verifier and pre-renders it so it is
- * ready the moment the user clicks "Send OTP", eliminating the delay.
+ * Creates the invisible reCAPTCHA verifier and attaches its DOM node.
+ * Does NOT call render() — the fresh token is fetched by signInWithPhoneNumber
+ * itself so it is always valid at the exact moment of the API call.
  */
-export const initRecaptcha = async () => {
-    try {
-        // Avoid double-init if already set up
-        if (window.recaptchaVerifier) return;
-        const verifier = createVerifier();
-        await verifier.render(); // contact Google servers early → faster OTP
-    } catch (err) {
-        // Non-fatal on init; sendOTP will retry
-        window.recaptchaVerifier = null;
-        console.warn('[reCAPTCHA] pre-init failed, will retry on send:', err.message);
-    }
+export const initRecaptcha = () => {
+    if (window.recaptchaVerifier) return; // already set up
+    createVerifier();
 };
 
 /**
  * Send OTP to phone number.
- * Reuses the already-initialized verifier. Only creates a new one if the
- * previous attempt errored out and cleared it.
+ * Reuses the verifier created on Login mount.
+ * Only creates a new one if the old verifier was cleared by an error.
  * @param {string} phoneNumber - e.g. "+919876543210"
  * @returns {Promise<ConfirmationResult>}
  */
 export const sendOTP = async (phoneNumber) => {
     try {
-        // Use existing verifier or create a fresh one (e.g., after a prior error)
+        // Ensure a verifier exists (safe to call if already set up)
         if (!window.recaptchaVerifier) {
             createVerifier();
         }
@@ -76,7 +79,7 @@ export const sendOTP = async (phoneNumber) => {
         return confirmationResult;
     } catch (error) {
         console.error('Error sending OTP:', error);
-        // Destroy on failure so the next attempt gets a clean verifier
+        // Destroy on failure so the next attempt starts completely clean
         if (window.recaptchaVerifier) {
             try { window.recaptchaVerifier.clear(); } catch (_) { }
             window.recaptchaVerifier = null;
