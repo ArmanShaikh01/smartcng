@@ -21,9 +21,15 @@ service cloud.firestore {
       return isAuth() && request.auth.uid == uid;
     }
 
-    // Fetch the caller's role from Firestore (1 extra read per evaluation)
+    // Fetch the caller's role from Firestore safely.
+    // Returns null if the user document does not exist yet
+    // (brand-new users who haven't completed signup).
+    // Using exists() prevents permission-denied errors during
+    // the new-user registration flow.
     function callerRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
     }
 
     function isAdmin()    { return isAuth() && callerRole() == 'admin'; }
@@ -50,8 +56,15 @@ service cloud.firestore {
     // ────────────────────────────────────────────────────────────────
     match /users/{userId} {
 
-      // READ: own doc OR admin
+      // READ (single document): own doc OR admin
       allow read: if isOwner(userId) || isAdmin();
+
+      // LIST (collection query): allow authenticated users to query
+      // by phoneNumber so useAuth.jsx can find admin-created operator/owner
+      // accounts (phone-keyed) and migrate them to UID-keyed docs.
+      // Without this rule, new users and staff logins get permission-denied
+      // on the phone-number fallback query.
+      allow list: if isAuth();
 
       // CREATE: only own UID doc; cannot self-assign privileged role
       allow create: if isOwner(userId)

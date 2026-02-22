@@ -1,7 +1,7 @@
 // Login page with Phone OTP and Signup
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sendOTP, verifyOTP, initRecaptcha } from '../firebase/auth';
+import { sendOTP, verifyOTP } from '../firebase/auth';
 import { COLLECTIONS } from '../firebase/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -55,10 +55,8 @@ const Login = () => {
         }
     }, [loading, user, userRole, profileResolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Initialize invisible reCAPTCHA once when Login mounts.
-    // Pre-rendering it here means it's ready the moment user clicks "Send OTP".
+    // Cleanup cooldown timer on unmount
     useEffect(() => {
-        initRecaptcha();
         return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
     }, []);
 
