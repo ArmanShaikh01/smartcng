@@ -1,6 +1,6 @@
 // My Booking Component - Shows active booking and queue
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDocs, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import { cancelBooking } from '../../utils/queueLogic';
@@ -10,28 +10,52 @@ import './MyBooking.css';
 
 const MyBooking = ({ booking, onBookingCancelled }) => {
     const [station, setStation] = useState(null);
+    const [liveBooking, setLiveBooking] = useState(booking); // real-time updated copy
     const [loading, setLoading] = useState(true);
     const [showCheckIn, setShowCheckIn] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+
+    // Real-time listener on the booking document
+    useEffect(() => {
+        const unsubscribe = onSnapshot(
+            doc(db, COLLECTIONS.BOOKINGS, booking.id),
+            (snap) => {
+                if (snap.exists()) {
+                    setLiveBooking({ id: snap.id, ...snap.data() });
+                }
+            },
+            (err) => console.error('Booking listener error:', err)
+        );
+        return () => unsubscribe();
+    }, [booking.id]);
 
     useEffect(() => {
         fetchStation();
     }, [booking.stationId]);
 
     useEffect(() => {
-        // Show check-in prompt if eligible and not checked in
-        if (booking.status === 'eligible' && !booking.isCheckedIn) {
+        // Auto-show check-in prompt when status becomes eligible
+        if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn) {
             setShowCheckIn(true);
         } else {
             setShowCheckIn(false);
         }
-    }, [booking.status, booking.isCheckedIn]);
+    }, [liveBooking.status, liveBooking.isCheckedIn]);
 
     const fetchStation = async () => {
         try {
-            const stationDoc = await getDoc(doc(db, COLLECTIONS.STATIONS, booking.stationId));
-            if (stationDoc.exists()) {
-                setStation({ id: stationDoc.id, ...stationDoc.data() });
+            // booking.stationId is a custom field (e.g. 'STATION_001'), NOT the Firestore doc ID
+            // — must query by field, not getDoc by ID
+            const q = query(
+                collection(db, COLLECTIONS.STATIONS),
+                where('stationId', '==', booking.stationId)
+            );
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const d = snap.docs[0];
+                setStation({ id: d.id, ...d.data() });
+            } else {
+                console.warn('Station not found for stationId:', booking.stationId);
             }
             setLoading(false);
         } catch (error) {
@@ -46,7 +70,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         }
 
         setCancelling(true);
-        const result = await cancelBooking(booking.id, booking.customerId);
+        const result = await cancelBooking(liveBooking.id, liveBooking.customerId);
 
         if (result.success) {
             onBookingCancelled();
@@ -57,37 +81,21 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
     };
 
     const getStatusDisplay = () => {
-        switch (booking.status) {
+        switch (liveBooking.status) {
             case 'waiting':
-                return {
-                    icon: '⏳',
-                    text: 'Waiting in Queue',
-                    color: 'status-waiting'
-                };
+                return { icon: '⏳', text: 'Waiting in Queue', color: 'status-waiting' };
             case 'eligible':
                 return {
                     icon: '📍',
-                    text: booking.isCheckedIn ? 'Checked-in' : 'Check-in Required',
-                    color: booking.isCheckedIn ? 'status-checked-in' : 'status-eligible'
+                    text: liveBooking.isCheckedIn ? 'Checked-in' : 'Check-in Required',
+                    color: liveBooking.isCheckedIn ? 'status-checked-in' : 'status-eligible'
                 };
             case 'checked_in':
-                return {
-                    icon: '✓',
-                    text: 'Checked-in',
-                    color: 'status-checked-in'
-                };
+                return { icon: '✓', text: 'Checked-in', color: 'status-checked-in' };
             case 'fueling':
-                return {
-                    icon: '⛽',
-                    text: 'Currently Fueling',
-                    color: 'status-fueling'
-                };
+                return { icon: '⛽', text: 'Currently Fueling', color: 'status-fueling' };
             default:
-                return {
-                    icon: '📋',
-                    text: booking.status,
-                    color: ''
-                };
+                return { icon: '📋', text: liveBooking.status, color: '' };
         }
     };
 
@@ -106,7 +114,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         <div className="my-booking-container">
             {showCheckIn && station && (
                 <CheckInPrompt
-                    booking={booking}
+                    booking={liveBooking}
                     station={station}
                     onCheckInSuccess={() => setShowCheckIn(false)}
                 />
@@ -123,17 +131,17 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             <div className="booking-info-grid">
                 <div className="info-card">
                     <div className="info-label">Queue Position</div>
-                    <div className="info-value large">#{booking.queuePosition}</div>
+                    <div className="info-value large">#{liveBooking.queuePosition}</div>
                 </div>
 
                 <div className="info-card">
                     <div className="info-label">Estimated Wait</div>
-                    <div className="info-value">{booking.estimatedWaitMinutes} min</div>
+                    <div className="info-value">{liveBooking.estimatedWaitMinutes} min</div>
                 </div>
 
                 <div className="info-card">
                     <div className="info-label">Vehicle Number</div>
-                    <div className="info-value">{booking.vehicleNumber}</div>
+                    <div className="info-value">{liveBooking.vehicleNumber}</div>
                 </div>
 
                 <div className="info-card">
@@ -142,7 +150,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
             </div>
 
-            {booking.status === 'eligible' && !booking.isCheckedIn && (
+            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
                 <div className="check-in-reminder">
                     <p>⚠️ You are now eligible to check-in. Please arrive at the station and check-in within 5 minutes.</p>
                     <button
@@ -159,7 +167,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
             )}
 
-            {booking.status === 'fueling' && (
+            {liveBooking.status === 'fueling' && (
                 <div className="fueling-notice">
                     <p>⛽ Your vehicle is currently being fueled. Please wait...</p>
                 </div>
@@ -175,7 +183,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 />
             </div>
 
-            {booking.status !== 'fueling' && (
+            {liveBooking.status !== 'fueling' && liveBooking.status !== 'checked_in' && (
                 <button
                     type="button"
                     onClick={handleCancelBooking}

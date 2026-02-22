@@ -1,138 +1,199 @@
-/* Vehicle Card Styles */
+/* ================================================================
+   VehicleCard — Premium Enterprise Queue Card
+   Smart CNG Design System
+   ================================================================ */
+
+/* ── Base card ── */
 .vehicle-card {
     display: flex;
     align-items: center;
-    gap: var(--spacing-md);
-    padding: var(--spacing-lg);
-    background-color: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    transition: all var(--transition-fast);
+    gap: 12px;
+    padding: 12px 16px;
+    background: #fff;
+    border: 1.5px solid #e5e7ec;
+    border-radius: 10px;
     position: relative;
     overflow: hidden;
+    margin-bottom: 8px;
+    transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+    /* Queue entrance animation */
+    animation: queueSlideUp 300ms ease-out both;
 }
 
 .vehicle-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 6px 18px rgba(14,124,91,0.09), 0 1px 4px rgba(0,0,0,0.05);
 }
 
+/* ── Status accent bars ── */
+.vehicle-card.green   { border-left: 3.5px solid #0E7C5B; }
+.vehicle-card.red     { border-left: 3.5px solid #dc2626; }
+.vehicle-card.fueling { border-left: 3.5px solid #FF8C1A; }
+
+/* Current user highlight */
 .vehicle-card.current-user {
-    border-color: var(--primary-color);
-    background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(37, 99, 235, 0.1) 100%);
+    border-color: rgba(14,124,91,0.35);
+    background: rgba(14,124,91,0.025);
 }
 
+/* Fueling card */
 .vehicle-card.fueling {
-    border-color: var(--warning-color);
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(245, 158, 11, 0.1) 100%);
+    border-color: rgba(255,140,26,0.3);
+    background: rgba(255,140,26,0.025);
 }
 
+/* ── Gas flow line (below fueling card) ── */
+.vehicle-card.fueling::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: rgba(255,140,26,0.18);
+    overflow: hidden;
+}
+
+/* ── Position badge ── */
 .vehicle-position {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 50px;
+    min-width: 34px;
+    flex-shrink: 0;
 }
 
 .position-number {
-    font-size: var(--text-2xl);
-    font-weight: 700;
-    color: var(--text-primary);
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--color-neutral-700, #374151);
+    line-height: 1;
 }
 
+/* ── Vehicle info ── */
 .vehicle-info {
     flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xs);
+    gap: 3px;
 }
 
 .vehicle-number {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--text-primary);
-    letter-spacing: 0.5px;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-neutral-900, #111827);
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .vehicle-status {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
+    font-size: 0.72rem;
+    color: var(--color-neutral-500, #6b7280);
     display: flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: 4px;
 }
 
+/* ── YOU badge ── */
 .current-user-badge {
-    position: absolute;
-    top: 0;
-    right: 0;
-    background-color: var(--primary-color);
-    color: white;
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: 0 var(--radius-lg) 0 var(--radius-md);
-    font-size: var(--text-xs);
-    font-weight: 700;
-    letter-spacing: 1px;
+    background: #0E7C5B;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    flex-shrink: 0;
+    text-transform: uppercase;
 }
 
+/* ── No Show button ── */
+.no-show-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1.5px solid #dc2626;
+    border-radius: 6px;
+    background: transparent;
+    color: #dc2626;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 180ms ease-out, color 180ms ease-out, transform 180ms ease-out;
+    white-space: nowrap;
+}
+
+.no-show-btn:hover:not(:disabled) {
+    background: #dc2626;
+    color: #fff;
+    transform: scale(1.03);
+}
+
+.no-show-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* ── Turn-near alert — current user's turn approaching ── */
+.vehicle-card.turn-near {
+    animation: turnNearPulse 6s ease-in-out infinite;
+    border-color: rgba(255, 140, 26, 0.35);
+}
+
+/* ── Fueling pipeline ── */
 .fueling-indicator {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background-color: var(--bg-secondary);
+    height: 3px;
+    border-radius: 0 0 12px 12px;
+    background: rgba(14, 124, 91, 0.08);
     overflow: hidden;
 }
 
-.fueling-animation {
+.fueling-pipeline {
+    position: relative;
+    width: 100%;
     height: 100%;
-    background: linear-gradient(90deg,
-            transparent 0%,
-            var(--warning-color) 50%,
-            transparent 100%);
-    animation: fuelingProgress 2s ease-in-out infinite;
+    overflow: hidden;
 }
 
-@keyframes fuelingProgress {
-    0% {
-        transform: translateX(-100%);
-    }
-
-    100% {
-        transform: translateX(100%);
-    }
+/* Each particle — flows left to right like compressed CNG */
+.fueling-particle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 40%;
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(14, 124, 91, 0.7) 50%,
+        transparent 100%
+    );
+    /* anim-pipeline class from animations.css drives this */
+    will-change: transform, opacity;
+}
+/* ── Spinner tiny ── */
+.spinner-tiny {
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid rgba(220,38,38,0.25);
+    border-top-color: #dc2626;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
 }
 
-/* Status-based border colors */
-.vehicle-card.green {
-    border-left: 4px solid var(--status-green);
-}
-
-.vehicle-card.red {
-    border-left: 4px solid var(--status-red);
-}
-
-.vehicle-card.fueling {
-    border-left: 4px solid var(--warning-color);
-}
-
-/* Mobile responsive */
-@media (max-width: 768px) {
-    .vehicle-card {
-        padding: var(--spacing-md);
-        gap: var(--spacing-sm);
-    }
-
-    .position-number {
-        font-size: var(--text-xl);
-    }
-
-    .vehicle-number {
-        font-size: var(--text-base);
-    }
-
-    .vehicle-status {
-        font-size: var(--text-xs);
-    }
+/* ── Mobile ── */
+@media (max-width: 480px) {
+    .vehicle-card    { padding: 10px 12px; gap: 8px; }
+    .position-number { font-size: 1rem; }
+    .vehicle-number  { font-size: 0.82rem; }
+    .no-show-btn     { font-size: 0.65rem; padding: 3px 8px; }
 }

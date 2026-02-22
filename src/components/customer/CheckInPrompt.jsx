@@ -14,24 +14,25 @@ const CheckInPrompt = ({ booking, station, onCheckInSuccess }) => {
         setChecking(true);
 
         try {
-            // Get current location
-            await getLocation();
-
-            if (gpsError) {
-                setError(gpsError);
+            // getLocation() returns the location data directly via Promise — don't read stale state
+            let currentLocation;
+            try {
+                currentLocation = await getLocation();
+            } catch (gpsErr) {
+                setError(gpsErr.message || 'Unable to get your location. Please enable GPS and try again.');
                 setChecking(false);
                 return;
             }
 
-            if (!location) {
+            if (!currentLocation || !currentLocation.latitude) {
                 setError('Unable to get your location. Please try again.');
                 setChecking(false);
                 return;
             }
 
-            // Validate geofence
+            // Validate geofence using the freshly returned location
             const validation = validateCheckIn(
-                location,
+                currentLocation,
                 station.location,
                 station.checkInRadius || 15
             );
@@ -39,7 +40,7 @@ const CheckInPrompt = ({ booking, station, onCheckInSuccess }) => {
             if (!validation.isValid) {
                 if (validation.distance > 50) {
                     setError(`You are ${validation.distance}m away from the station. Please come closer.`);
-                } else if (location.accuracy > 20) {
+                } else if (currentLocation.accuracy > 20) {
                     setError('GPS accuracy is low. Please enable high-accuracy mode and try again.');
                 } else {
                     setError(`You are ${validation.distance}m away. Required: ${station.checkInRadius || 15}m`);
@@ -48,10 +49,10 @@ const CheckInPrompt = ({ booking, station, onCheckInSuccess }) => {
                 return;
             }
 
-            // Check in
+            // Perform check-in
             const result = await checkInBooking(
                 booking.id,
-                { ...location, distance: validation.distance },
+                { ...currentLocation, distance: validation.distance },
                 booking.customerId
             );
 

@@ -25,17 +25,81 @@ export const AuthProvider = ({ children }) => {
             if (firebaseUser) {
                 setUser(firebaseUser);
 
-                // Fetch user profile from Firestore
                 try {
+                    // 1. Try lookup by UID (fastest path)
                     const userDoc = await getDocument(COLLECTIONS.USERS, firebaseUser.uid);
+
                     if (userDoc.exists()) {
                         const profile = userDoc.data();
+
+                        // If UID doc says 'customer', check if there's a phone-based higher-privilege doc
+                        if (profile.role === 'customer' && firebaseUser.phoneNumber) {
+                            const { collection, query, where, getDocs, setDoc, deleteDoc } =
+                                await import('firebase/firestore');
+                            const { db } = await import('../firebase/config');
+
+                            // Check by exact phone
+                            const pq = query(
+                                collection(db, COLLECTIONS.USERS),
+                                where('phoneNumber', '==', firebaseUser.phoneNumber)
+                            );
+                            const pSnap = await getDocs(pq);
+                            const privilegedDoc = pSnap.docs.find(
+                                d => d.id !== firebaseUser.uid && ['operator', 'owner', 'admin'].includes(d.data().role)
+                            );
+
+                            if (privilegedDoc) {
+                                const privilegedProfile = privilegedDoc.data();
+                                const { doc } = await import('firebase/firestore');
+
+                                // Migrate privileged doc to UID-keyed, delete stale customer + old docs
+                                const newDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
+                                await setDoc(newDocRef, { ...privilegedProfile, userId: firebaseUser.uid, phoneNumber: firebaseUser.phoneNumber });
+                                await deleteDoc(privilegedDoc.ref); // delete old phone-keyed doc
+                                // Also delete the stale customer UID doc (we just overwrote it with setDoc)
+
+                                setUserProfile({ ...privilegedProfile, userId: firebaseUser.uid });
+                                setUserRole(privilegedProfile.role);
+                                setLoading(false);
+                                return;
+                            }
+                        }
+
                         setUserProfile(profile);
                         setUserRole(profile.role);
                     } else {
-                        // New user - needs to complete registration
-                        setUserProfile(null);
-                        setUserRole(null);
+                        // 2. Fallback: lookup by phoneNumber (for admin-created operator/owner)
+                        const { collection, query, where, getDocs, setDoc, deleteDoc } =
+                            await import('firebase/firestore');
+                        const { db } = await import('../firebase/config');
+
+                        const q = query(
+                            collection(db, COLLECTIONS.USERS),
+                            where('phoneNumber', '==', firebaseUser.phoneNumber)
+                        );
+                        const snap = await getDocs(q);
+
+                        if (!snap.empty) {
+                            const oldDocRef = snap.docs[0].ref;
+                            const profile = snap.docs[0].data();
+
+                            // Migrate doc to UID-based ID so fast path works on next login
+                            const { doc } = await import('firebase/firestore');
+                            const newDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
+                            await setDoc(newDocRef, { ...profile, userId: firebaseUser.uid });
+
+                            // Delete old doc only if it had a different ID
+                            if (oldDocRef.id !== firebaseUser.uid) {
+                                await deleteDoc(oldDocRef);
+                            }
+
+                            setUserProfile({ ...profile, userId: firebaseUser.uid });
+                            setUserRole(profile.role);
+                        } else {
+                            // Genuinely new user — needs to complete registration
+                            setUserProfile(null);
+                            setUserRole(null);
+                        }
                     }
                 } catch (error) {
                     console.error('Error fetching user profile:', error);
@@ -50,6 +114,7 @@ export const AuthProvider = ({ children }) => {
 
         return unsubscribe;
     }, []);
+
 
     const value = useMemo(() => ({
         user,

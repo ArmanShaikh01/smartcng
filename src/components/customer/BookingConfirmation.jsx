@@ -4,7 +4,7 @@ import { validateBooking, createBooking } from '../../utils/queueLogic';
 import { useAuth } from '../../hooks/useAuth';
 import './BookingConfirmation.css';
 
-const BookingConfirmation = ({ station, vehicleNumber, onBookingCreated, onCancel }) => {
+const BookingConfirmation = ({ station, vehicleNumber, onBookingCreated, onCancel, onChangeVehicle }) => {
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -127,12 +127,24 @@ const BookingConfirmation = ({ station, vehicleNumber, onBookingCreated, onCance
                         type="button"
                         onClick={(e) => {
                             e.stopPropagation();
+                            onChangeVehicle && onChangeVehicle();
+                        }}
+                        className="btn btn-outline btn-block"
+                        disabled={loading}
+                    >
+                        🚗 Change Vehicle
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
                             onCancel();
                         }}
                         className="btn btn-outline btn-block"
                         disabled={loading}
                     >
-                        Cancel
+                        ← Back to Stations
                     </button>
                 </div>
             </div>

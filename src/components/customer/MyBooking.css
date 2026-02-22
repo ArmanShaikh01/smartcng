@@ -1,169 +1,218 @@
-/* My Booking Styles */
+/* My Booking — Smart CNG Brand
+   Matches MyBooking.jsx class names exactly
+   ============================================ */
+
 .my-booking-container {
-    padding: var(--spacing-xl);
-    max-width: 1200px;
+    max-width: 720px;
     margin: 0 auto;
+    padding: var(--space-6) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
 }
 
+/* ── Header: Title + Status badge ── */
 .booking-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-2xl);
-    padding-bottom: var(--spacing-lg);
-    border-bottom: 2px solid var(--border-color);
+    gap: var(--space-3);
+    flex-wrap: wrap;
 }
 
 .booking-header h2 {
-    font-size: var(--text-3xl);
-    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: var(--text-2xl);
+    font-weight: var(--font-bold);
+    color: var(--color-neutral-900);
     margin: 0;
 }
 
+/* Status pill badge */
 .booking-status {
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--radius-lg);
-    font-weight: 600;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-full);
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    font-weight: var(--font-semibold);
+    white-space: nowrap;
 }
 
 .status-waiting {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: var(--warning-color);
+    background: rgba(245, 158, 11, 0.1);
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .status-eligible {
-    background-color: rgba(59, 130, 246, 0.1);
-    color: var(--primary-color);
-}
-
-.status-checked-in {
-    background-color: rgba(34, 197, 94, 0.1);
-    color: var(--success-color);
-}
-
-.status-fueling {
-    background-color: rgba(245, 158, 11, 0.1);
-    color: var(--warning-color);
+    background: rgba(255, 140, 26, 0.1);
+    color: var(--color-accent-700);
+    border: 1px solid rgba(255, 140, 26, 0.3);
     animation: pulse 2s ease-in-out infinite;
 }
 
-.status-icon {
-    font-size: var(--text-xl);
+.status-checked-in {
+    background: rgba(14, 124, 91, 0.1);
+    color: var(--color-primary-700);
+    border: 1px solid rgba(14, 124, 91, 0.25);
 }
 
-.status-text {
-    font-size: var(--text-base);
+.status-fueling {
+    background: rgba(245, 158, 11, 0.12);
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    animation: pulse 2s ease-in-out infinite;
 }
 
+.status-icon { font-size: 1rem; }
+.status-text { font-size: var(--text-sm); }
+
+/* ── Info Grid: 4 stat cards ── */
 .booking-info-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-2xl);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-3);
 }
 
-.info-card {
-    background-color: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+.booking-info-grid .info-card {
+    background: var(--color-neutral-0);
+    border: 1px solid var(--color-neutral-100);
+    border-radius: var(--radius-base);
+    padding: var(--space-4);
     text-align: center;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
 }
 
-.info-label {
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
-    margin-bottom: var(--spacing-sm);
+.booking-info-grid .info-label {
+    font-size: var(--text-xs);
+    font-weight: var(--font-bold);
+    color: var(--color-neutral-400);
+    font-family: var(--font-heading);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
 }
 
-.info-value {
-    font-size: var(--text-xl);
-    font-weight: 700;
-    color: var(--text-primary);
+.booking-info-grid .info-value {
+    font-family: var(--font-heading);
+    font-size: var(--text-base);
+    font-weight: var(--font-bold);
+    color: var(--color-neutral-800);
+    word-break: break-all;
 }
 
-.info-value.large {
+/* Queue position — larger */
+.booking-info-grid .info-value.large {
     font-size: var(--text-4xl);
-    color: var(--primary-color);
+    font-weight: var(--font-extrabold);
+    color: var(--color-primary-600);
+    line-height: 1;
 }
 
+/* ── Check-in Reminder Banner ── */
 .check-in-reminder {
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%);
-    border: 2px solid var(--primary-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
-    margin-bottom: var(--spacing-2xl);
-    text-align: center;
+    background: rgba(255, 140, 26, 0.06);
+    border: 1.5px solid rgba(255, 140, 26, 0.35);
+    border-radius: var(--radius-base);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
 }
 
 .check-in-reminder p {
-    font-size: var(--text-base);
-    color: var(--text-primary);
-    margin-bottom: var(--spacing-lg);
+    font-size: var(--text-sm);
+    color: var(--color-neutral-700);
+    margin: 0;
+    line-height: 1.55;
+    font-weight: var(--font-medium);
 }
 
+/* Check-in Now button — contained inside banner */
+.check-in-reminder .btn {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ── Fueling Notice ── */
 .fueling-notice {
-    background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.2) 100%);
-    border: 2px solid var(--warning-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
-    margin-bottom: var(--spacing-2xl);
+    background: rgba(14, 124, 91, 0.06);
+    border: 1.5px solid rgba(14, 124, 91, 0.25);
+    border-radius: var(--radius-base);
+    padding: var(--space-4);
     text-align: center;
 }
 
 .fueling-notice p {
-    font-size: var(--text-lg);
-    font-weight: 600;
-    color: var(--warning-color);
+    font-size: var(--text-base);
+    font-weight: var(--font-semibold);
+    color: var(--color-primary-700);
     margin: 0;
 }
 
+/* ── Live Queue Section ── */
 .queue-section {
-    margin-bottom: var(--spacing-2xl);
+    background: var(--color-neutral-0);
+    border: 1px solid var(--color-neutral-100);
+    border-radius: var(--radius-base);
+    padding: var(--space-4);
+    box-shadow: var(--shadow-sm);
 }
 
 .queue-section h3 {
-    font-size: var(--text-2xl);
-    margin-bottom: var(--spacing-lg);
-    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    font-weight: var(--font-bold);
+    color: var(--color-neutral-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 var(--space-3) 0;
 }
 
+/* ── Cancel Booking Button ── */
+.my-booking-container > .btn-block {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ── Loading ── */
 .my-booking-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 400px;
-    gap: var(--spacing-lg);
+    min-height: 300px;
+    gap: var(--space-4);
+    color: var(--color-neutral-500);
 }
 
-/* Mobile responsive */
-@media (max-width: 768px) {
+/* ── Responsive ── */
+@media (max-width: 640px) {
     .my-booking-container {
-        padding: var(--spacing-lg);
+        padding: var(--space-4) var(--space-3);
+        gap: var(--space-3);
     }
 
     .booking-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--spacing-md);
     }
 
     .booking-info-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-md);
+        gap: var(--space-2);
     }
 
-    .info-card {
-        padding: var(--spacing-lg);
+    .booking-info-grid .info-card {
+        padding: var(--space-3);
     }
 
-    .info-value.large {
+    .booking-info-grid .info-value.large {
         font-size: var(--text-3xl);
     }
 }

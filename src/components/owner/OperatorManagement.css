@@ -1,114 +1,137 @@
-/* Operator Management Styles */
+/* Operator Management — Owner Panel */
+
 .operator-management {
-    padding: var(--spacing-xl);
+    padding: 0;
 }
 
 .om-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-2xl);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .om-header h2 {
-    font-size: var(--text-2xl);
-    color: var(--text-primary);
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-neutral-800, #1f2937);
     margin: 0;
 }
 
 .om-form {
-    padding: var(--spacing-2xl);
-    margin-bottom: var(--spacing-2xl);
+    background: var(--color-neutral-0, #fff);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
 }
 
 .om-form h3 {
-    font-size: var(--text-xl);
-    margin-bottom: var(--spacing-xl);
-    color: var(--text-primary);
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 16px 0;
+    color: var(--color-neutral-800, #1f2937);
 }
 
 .om-loading,
 .om-empty {
     text-align: center;
-    padding: var(--spacing-2xl);
-    color: var(--text-secondary);
+    padding: 40px;
+    color: var(--color-neutral-500, #6b7280);
+    font-size: 0.9rem;
 }
 
 .operators-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    gap: 12px;
 }
 
 .operator-card {
-    padding: var(--spacing-xl);
+    background: var(--color-neutral-0, #fff);
+    border-radius: 12px;
+    padding: 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all var(--transition-fast);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
+    transition: all 0.2s ease;
 }
 
 .operator-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .operator-info {
     display: flex;
-    gap: var(--spacing-lg);
+    gap: 12px;
     align-items: center;
+    min-width: 0;
 }
 
 .operator-avatar {
-    width: 50px;
-    height: 50px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary-color) 0%, #1d4ed8 100%);
+    background: linear-gradient(135deg, #059669, #10b981);
     color: white;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: var(--text-xl);
+    font-size: 1rem;
     font-weight: 700;
+    flex-shrink: 0;
+}
+
+.operator-details {
+    min-width: 0;
 }
 
 .operator-details h4 {
-    margin: 0 0 var(--spacing-xs) 0;
-    color: var(--text-primary);
-    font-size: var(--text-lg);
+    margin: 0 0 2px 0;
+    color: var(--color-neutral-800, #1f2937);
+    font-size: 0.9rem;
+    font-weight: 600;
 }
 
 .operator-details p {
-    margin: 0 0 var(--spacing-sm) 0;
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
+    margin: 0 0 4px 0;
+    color: var(--color-neutral-500, #6b7280);
+    font-size: 0.8rem;
 }
 
 .role-badge {
     display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-sm);
-    background-color: rgba(59, 130, 246, 0.2);
-    color: var(--primary-color);
-    border-radius: var(--radius-md);
-    font-size: var(--text-xs);
-    font-weight: 600;
+    padding: 2px 8px;
+    background-color: rgba(5, 150, 105, 0.1);
+    color: #059669;
+    border-radius: 20px;
+    font-size: 0.65rem;
+    font-weight: 700;
     text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .btn-delete-small {
-    padding: var(--spacing-sm) var(--spacing-md);
-    background-color: rgba(239, 68, 68, 0.1);
-    color: var(--danger-color);
-    border: 1px solid var(--danger-color);
-    border-radius: var(--radius-md);
+    padding: 6px 12px;
+    background-color: rgba(239, 68, 68, 0.08);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 8px;
     cursor: pointer;
-    font-size: var(--text-sm);
+    font-size: 0.8rem;
     font-weight: 600;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
+    flex-shrink: 0;
 }
 
 .btn-delete-small:hover {
-    background-color: var(--danger-color);
+    background-color: #dc2626;
     color: white;
 }
 
@@ -117,10 +140,19 @@
     .om-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--spacing-md);
     }
 
     .operators-grid {
         grid-template-columns: 1fr;
+    }
+
+    .operator-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .om-form {
+        padding: 16px;
     }
 }

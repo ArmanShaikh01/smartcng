@@ -47,6 +47,22 @@ const OperatorHome = () => {
         );
     }
 
+    if (station.isSuspended) {
+        return (
+            <div className="operator-home">
+                <Navbar title={`Operator - ${station.name}`} />
+                <div className="operator-error" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <h2 style={{ fontSize: '3rem', marginBottom: '16px' }}>🚫</h2>
+                    <h2 style={{ color: '#ef4444', marginBottom: '12px' }}>Station Suspended</h2>
+                    <p style={{ color: '#6b7280', maxWidth: '400px', margin: '0 auto', lineHeight: '1.6' }}>
+                        Your station <strong>"{station.name}"</strong> has been suspended by the admin.
+                        All operations are currently disabled. Please contact the administrator.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="operator-home">
             <Navbar title={`Operator - ${station.name}`} />

@@ -11,7 +11,7 @@ import './CustomerHome.css';
 
 const CustomerHome = () => {
     const { user } = useAuth();
-    const [currentStep, setCurrentStep] = useState('loading'); // loading, vehicle, station, confirm, booking
+    const [currentStep, setCurrentStep] = useState('loading'); // loading, station, vehicle, confirm, booking
     const [selectedVehicle, setSelectedVehicle] = useState(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [activeBooking, setActiveBooking] = useState(null);
@@ -29,17 +29,19 @@ const CustomerHome = () => {
             setActiveBooking(booking);
             setCurrentStep('booking');
         } else {
-            setCurrentStep('vehicle');
+            setCurrentStep('station');
         }
     };
 
-    const handleVehicleSelected = (vehicle) => {
-        setSelectedVehicle(vehicle);
-        setCurrentStep('station');
-    };
-
+    // Station selected → go pick a vehicle
     const handleStationSelected = (station) => {
         setSelectedStation(station);
+        setCurrentStep('vehicle');
+    };
+
+    // Vehicle selected → go to confirm
+    const handleVehicleSelected = (vehicle) => {
+        setSelectedVehicle(vehicle);
         setCurrentStep('confirm');
     };
 
@@ -51,6 +53,12 @@ const CustomerHome = () => {
         setActiveBooking(null);
         setSelectedVehicle(null);
         setSelectedStation(null);
+        setCurrentStep('station');
+    };
+
+    // Go back to vehicle picker without losing the chosen station
+    const handleChangeVehicle = () => {
+        setSelectedVehicle(null);
         setCurrentStep('vehicle');
     };
 
@@ -73,23 +81,28 @@ const CustomerHome = () => {
             <Navbar title="CNG Queue System" />
 
             <div className="customer-content">
-                {currentStep === 'vehicle' && (
-                    <VehicleSelection onVehicleSelected={handleVehicleSelected} />
-                )}
-
+            {/* 1. Station list — first screen after login */}
                 {currentStep === 'station' && (
                     <StationList onSelectStation={handleStationSelected} />
                 )}
 
+                {/* 2. Vehicle selection — after choosing a station */}
+                {currentStep === 'vehicle' && (
+                    <VehicleSelection onVehicleSelected={handleVehicleSelected} />
+                )}
+
+                {/* 3. Confirm booking */}
                 {currentStep === 'confirm' && selectedStation && selectedVehicle && (
                     <BookingConfirmation
                         station={selectedStation}
                         vehicleNumber={selectedVehicle}
                         onBookingCreated={handleBookingCreated}
                         onCancel={handleCancelConfirmation}
+                        onChangeVehicle={handleChangeVehicle}
                     />
                 )}
 
+                {/* 4. Active booking */}
                 {currentStep === 'booking' && activeBooking && (
                     <MyBooking
                         booking={activeBooking}

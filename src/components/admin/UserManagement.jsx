@@ -1,6 +1,6 @@
 // User Management Component for Admin
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import './UserManagement.css';
@@ -18,23 +18,24 @@ const UserManagement = () => {
     });
 
     useEffect(() => {
-        fetchUsers();
+        // Real-time listener — auto-refreshes whenever roles or any user field changes
+        const unsubscribe = onSnapshot(
+            collection(db, COLLECTIONS.USERS),
+            (snapshot) => {
+                const usersData = snapshot.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(user => user.role !== 'customer');
+                setUsers(usersData);
+                setLoading(false);
+            },
+            (error) => {
+                console.error('Error listening to users:', error);
+                setLoading(false);
+            }
+        );
         fetchStations();
+        return () => unsubscribe(); // cleanup on unmount
     }, []);
-
-    const fetchUsers = async () => {
-        try {
-            const snapshot = await getDocs(collection(db, COLLECTIONS.USERS));
-            const usersData = snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() }))
-                .filter(user => user.role !== 'customer'); // Only show staff
-            setUsers(usersData);
-            setLoading(false);
-        } catch (error) {
-            console.error('Error fetching users:', error);
-            setLoading(false);
-        }
-    };
 
     const fetchStations = async () => {
         try {

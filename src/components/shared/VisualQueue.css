@@ -1,91 +1,131 @@
-/* Visual Queue Styles */
+/* ================================================================
+   VisualQueue — Live Queue Panel
+   Smart CNG Design System
+   ================================================================ */
+
 .visual-queue-container {
-    background-color: var(--bg-primary);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
-    box-shadow: var(--shadow-md);
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+    border: 1.5px solid #e5e7ec;
+    overflow: hidden;
 }
 
+/* ── Header ── */
 .queue-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: var(--spacing-lg);
-    padding-bottom: var(--spacing-md);
-    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .queue-header h3 {
-    font-size: var(--text-2xl);
-    color: var(--text-primary);
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-neutral-800, #1f2937);
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
-.queue-stats {
-    display: flex;
-    gap: var(--spacing-md);
-    align-items: center;
+/* Live pulse dot */
+.queue-header h3::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #0E7C5B;
+    flex-shrink: 0;
+    animation: greenPulse 2.4s ease-in-out infinite;
 }
+
+/* ── Stats chip ── */
+.queue-stats { display: flex; gap: 8px; align-items: center; }
 
 .queue-count {
-    background-color: var(--primary-color);
-    color: white;
-    padding: var(--spacing-sm) var(--spacing-md);
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    font-size: var(--text-sm);
+    background: #0E7C5B;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
 }
 
+/* ── Legend ── */
 .queue-legend {
     display: flex;
-    gap: var(--spacing-lg);
-    margin-bottom: var(--spacing-lg);
-    padding: var(--spacing-md);
-    background-color: var(--bg-secondary);
-    border-radius: var(--radius-md);
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #f1f5f9;
+    flex-wrap: wrap;
 }
 
 .legend-item {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
-    font-size: var(--text-sm);
-    color: var(--text-secondary);
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--color-neutral-500, #6b7280);
+    font-weight: 500;
 }
 
+/* Status dots */
 .status-dot {
-    width: 12px;
-    height: 12px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     display: inline-block;
+    flex-shrink: 0;
 }
 
 .status-dot.green {
-    background-color: var(--status-green);
-    box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+    background: #0E7C5B;
+    animation: greenPulse 2.4s ease-in-out infinite;
 }
 
 .status-dot.red {
-    background-color: var(--status-red);
-    box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+    background: #dc2626;
+    animation: redBlink 2s ease-in-out 1;
 }
 
+.status-dot.orange {
+    background: #FF8C1A;
+}
+
+/* ── Queue list ── */
 .queue-list {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: 0;
+    /* gap is on vehicle-card margin */
 }
 
+/* ── More indicator ── */
 .queue-more {
-    margin-top: var(--spacing-lg);
-    padding: var(--spacing-md);
+    margin-top: 10px;
+    padding: 10px;
     text-align: center;
-    background-color: var(--bg-secondary);
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px dashed #d8e3dd;
+    color: var(--color-neutral-500, #6b7280);
+    font-size: 0.78rem;
+    font-weight: 500;
 }
 
+/* ── States ── */
 .visual-queue-loading,
 .visual-queue-error,
 .visual-queue-empty {
@@ -93,43 +133,42 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: var(--spacing-2xl);
+    padding: 36px 16px;
     text-align: center;
-    gap: var(--spacing-md);
+    gap: 10px;
 }
 
-.visual-queue-error {
-    color: var(--danger-color);
-}
-
-.visual-queue-empty {
-    color: var(--text-secondary);
-}
-
-.visual-queue-empty p {
-    font-size: var(--text-xl);
+.visual-queue-loading p,
+.visual-queue-empty p,
+.visual-queue-error p {
+    font-size: 0.9rem;
+    font-weight: 600;
     margin: 0;
+    color: var(--color-neutral-600, #4b5563);
 }
 
-.visual-queue-empty small {
-    font-size: var(--text-sm);
-    color: var(--text-tertiary);
+.visual-queue-empty   p { color: var(--color-neutral-500, #6b7280); }
+.visual-queue-error   p { color: #dc2626; }
+
+.visual-queue-empty small,
+.visual-queue-error small {
+    font-size: 0.78rem;
+    color: var(--color-neutral-400, #9ca3af);
 }
 
-/* Mobile responsive */
+/* ── Spinner ── */
+.spinner-small {
+    width: 22px;
+    height: 22px;
+    border: 2px solid rgba(14,124,91,0.15);
+    border-top-color: #0E7C5B;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ── Mobile ── */
 @media (max-width: 768px) {
-    .visual-queue-container {
-        padding: var(--spacing-lg);
-    }
-
-    .queue-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--spacing-md);
-    }
-
-    .queue-legend {
-        flex-direction: column;
-        gap: var(--spacing-sm);
-    }
+    .visual-queue-container { padding: 14px 12px; }
+    .queue-header { flex-direction: column; align-items: flex-start; }
+    .queue-legend { flex-direction: column; gap: 6px; }
 }

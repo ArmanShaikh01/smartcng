@@ -1,6 +1,6 @@
 // Station Management Component - CRUD operations for stations
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import MapLocationPicker from './MapLocationPicker';
@@ -21,13 +21,28 @@ const StationManagement = () => {
         checkInRadius: 15,
         maxPhysicalVehicles: 10,
         graceWindowMinutes: 5,
+        ownerName: '',
         ownerPhone: '',
-        ownerName: ''
     });
 
     useEffect(() => {
-        fetchStations();
+        // Real-time listener — auto-refreshes whenever a station is added/edited/deleted
+        const unsubscribe = onSnapshot(
+            collection(db, COLLECTIONS.STATIONS),
+            (snapshot) => {
+                const stationsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                setStations(stationsData);
+                setLoading(false);
+            },
+            (error) => {
+                console.error('Error listening to stations:', error);
+                setLoading(false);
+            }
+        );
+        return () => unsubscribe(); // cleanup on unmount
     }, []);
+
+
 
     // Generate next station ID
     const generateStationId = () => {
@@ -68,6 +83,18 @@ const StationManagement = () => {
         setLoading(true);
 
         try {
+            // Duplicate stationId check for new stations
+            if (!editingStation) {
+                const dupCheck = await getDocs(
+                    query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', formData.stationId))
+                );
+                if (!dupCheck.empty) {
+                    alert(`Station ID "${formData.stationId}" already exists! Please use a unique ID.`);
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const stationData = {
                 stationId: formData.stationId,
                 name: formData.name,
@@ -83,7 +110,8 @@ const StationManagement = () => {
                 graceWindowMinutes: parseInt(formData.graceWindowMinutes),
                 totalVehiclesServed: 0,
                 totalSkips: 0,
-                ownerId: formData.ownerPhone || '',
+                ownerName: formData.ownerName || '',
+                ownerPhone: formData.ownerPhone || '',
                 operatorIds: [],
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
@@ -96,27 +124,21 @@ const StationManagement = () => {
                 });
                 alert('Station updated successfully!');
             } else {
-                // Create station
-                await addDoc(collection(db, COLLECTIONS.STATIONS), stationData);
+                const stationRef = await addDoc(collection(db, COLLECTIONS.STATIONS), stationData);
 
-                // Create owner user if phone provided
-                if (formData.ownerPhone && formData.ownerName) {
-                    const ownerData = {
-                        userId: `owner_${Date.now()}`,
-                        phoneNumber: formData.ownerPhone,
+                // Also create an owner user in Firestore so they can log in
+                if (formData.ownerName && formData.ownerPhone) {
+                    const ownerPhone = '+91' + formData.ownerPhone.replace(/\D/g, '').slice(-10);
+                    await addDoc(collection(db, COLLECTIONS.USERS), {
                         name: formData.ownerName,
+                        phoneNumber: ownerPhone,
                         role: 'owner',
                         stationId: formData.stationId,
-                        vehicles: [],
-                        noShowCount: 0,
-                        isBanned: false,
-                        bannedUntil: null,
-                        createdAt: new Date()
-                    };
-                    await addDoc(collection(db, COLLECTIONS.USERS), ownerData);
+                        createdAt: serverTimestamp()
+                    });
                 }
 
-                alert('Station and owner created successfully!');
+                alert('Station created successfully!');
             }
 
             resetForm();
@@ -217,17 +239,22 @@ const StationManagement = () => {
         }
     };
 
-    const handleDelete = async (stationId) => {
-        if (!confirm('Are you sure you want to delete this station? This action cannot be undone.')) {
+    const handleToggleSuspend = async (station) => {
+        const isSuspended = station.isSuspended || false;
+        const action = isSuspended ? 'unsuspend' : 'suspend';
+        if (!confirm(`Are you sure you want to ${action} "${station.name}"?`)) {
             return;
         }
 
         try {
-            await deleteDoc(doc(db, COLLECTIONS.STATIONS, stationId));
-            fetchStations();
+            await updateDoc(doc(db, COLLECTIONS.STATIONS, station.id), {
+                isSuspended: !isSuspended,
+                updatedAt: serverTimestamp()
+            });
+            alert(`Station ${isSuspended ? 'unsuspended' : 'suspended'} successfully!`);
         } catch (error) {
-            console.error('Error deleting station:', error);
-            alert('Failed to delete station: ' + error.message);
+            console.error('Error updating station:', error);
+            alert('Failed to update station: ' + error.message);
         }
     };
 
@@ -241,8 +268,8 @@ const StationManagement = () => {
             checkInRadius: 15,
             maxPhysicalVehicles: 10,
             graceWindowMinutes: 5,
+            ownerName: '',
             ownerPhone: '',
-            ownerName: ''
         });
         setEditingStation(null);
         setShowForm(false);
@@ -261,8 +288,8 @@ const StationManagement = () => {
             checkInRadius: 15,
             maxPhysicalVehicles: 10,
             graceWindowMinutes: 5,
+            ownerName: '',
             ownerPhone: '',
-            ownerName: ''
         });
     };
 
@@ -280,175 +307,206 @@ const StationManagement = () => {
             </div>
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="station-form card">
-                    <h3>{editingStation ? 'Edit Station' : 'Add New Station'}</h3>
+                <form onSubmit={handleSubmit} className="station-form">
 
-                    <div className="form-grid">
-                        <div className="form-group">
-                            <label>Station ID *</label>
-                            <input
-                                type="text"
-                                className="input"
-                                value={formData.stationId}
-                                onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
-                                required
-                                placeholder="STATION_001"
-                                disabled={!editingStation}
-                                style={{ backgroundColor: !editingStation ? '#f3f4f6' : 'white' }}
-                            />
-                            {!editingStation && <small>Auto-generated unique ID</small>}
+                    {/* ─ Form Header ─ */}
+                    <div className="station-form-header">
+                        <div className="station-form-header-icon">
+                            {editingStation ? '✏️' : '🏢'}
                         </div>
-
-                        <div className="form-group">
-                            <label>Station Name *</label>
-                            <input
-                                type="text"
-                                className="input"
-                                value={formData.name}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                required
-                                placeholder="CNG Station - Andheri"
-                            />
-                            {formData.name && formData.latitude && <small style={{ color: '#10b981' }}>✓ Auto-filled from map (editable)</small>}
+                        <div>
+                            <h3>{editingStation ? 'Edit Station' : 'Add New Station'}</h3>
+                            <p>{editingStation ? `Editing: ${editingStation.name}` : 'Fill in the details to register a new CNG station'}</p>
                         </div>
-
-                        <div className="form-group full-width">
-                            <label>Address *</label>
-                            <input
-                                type="text"
-                                className="input"
-                                value={formData.address}
-                                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                                required
-                                placeholder="Andheri West, Mumbai, Maharashtra"
-                            />
-                            {formData.address && formData.latitude && <small style={{ color: '#10b981' }}>✓ Auto-filled from map (editable)</small>}
-                        </div>
-
-                        {/* Map Picker Toggle */}
-                        <div className="form-group full-width">
-                            <div className="map-toggle-container">
-                                <button
-                                    type="button"
-                                    onClick={() => setUseMapPicker(!useMapPicker)}
-                                    className="btn btn-outline btn-sm"
-                                >
-                                    {useMapPicker ? '✍️ Switch to Manual Entry' : '🗺️ Use Map Picker'}
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Map Picker Component */}
-                        {useMapPicker && (
-                            <div className="form-group full-width">
-                                <MapLocationPicker
-                                    latitude={parseFloat(formData.latitude) || null}
-                                    longitude={parseFloat(formData.longitude) || null}
-                                    onLocationSelect={handleMapLocationSelect}
-                                />
-                            </div>
-                        )}
-
-                        <div className="form-group">
-                            <label>Latitude *</label>
-                            <input
-                                type="number"
-                                step="0.000001"
-                                className="input"
-                                value={formData.latitude}
-                                onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
-                                required
-                                placeholder="19.1234"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Longitude *</label>
-                            <input
-                                type="number"
-                                step="0.000001"
-                                className="input"
-                                value={formData.longitude}
-                                onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
-                                required
-                                placeholder="72.8367"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Check-in Radius (meters)</label>
-                            <input
-                                type="number"
-                                className="input"
-                                value={formData.checkInRadius}
-                                onChange={(e) => setFormData({ ...formData, checkInRadius: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Max Physical Vehicles</label>
-                            <input
-                                type="number"
-                                className="input"
-                                value={formData.maxPhysicalVehicles}
-                                onChange={(e) => setFormData({ ...formData, maxPhysicalVehicles: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Grace Window (minutes)</label>
-                            <input
-                                type="number"
-                                className="input"
-                                value={formData.graceWindowMinutes}
-                                onChange={(e) => setFormData({ ...formData, graceWindowMinutes: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        {!editingStation && (
-                            <>
-                                <div className="form-group full-width" style={{ marginTop: 'var(--spacing-xl)' }}>
-                                    <h4 style={{ color: 'var(--text-primary)', marginBottom: 'var(--spacing-md)' }}>Station Owner Details</h4>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Owner Phone Number</label>
-                                    <input
-                                        type="tel"
-                                        className="input"
-                                        value={formData.ownerPhone}
-                                        onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
-                                        placeholder="+91 9876543210"
-                                    />
-                                    <small>Owner will be created automatically</small>
-                                </div>
-
-                                <div className="form-group">
-                                    <label>Owner Name</label>
-                                    <input
-                                        type="text"
-                                        className="input"
-                                        value={formData.ownerName}
-                                        onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
-                                        placeholder="John Doe"
-                                    />
-                                </div>
-                            </>
-                        )}
                     </div>
 
+                    {/* ─ Form Body ─ */}
+                    <div className="station-form-body">
+                        <div className="form-grid">
+
+                            {/* Station ID */}
+                            <div className="form-group">
+                                <label>Station ID *</label>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={formData.stationId}
+                                    onChange={(e) => setFormData({ ...formData, stationId: e.target.value })}
+                                    required
+                                    placeholder="STATION_001"
+                                    disabled={!editingStation}
+                                    style={{ backgroundColor: !editingStation ? 'var(--color-neutral-50)' : '' }}
+                                />
+                                {!editingStation && <small>Auto-generated unique ID</small>}
+                            </div>
+
+                            {/* Station Name */}
+                            <div className="form-group">
+                                <label>Station Name *</label>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    required
+                                    placeholder="CNG Station - Andheri"
+                                />
+                                {formData.name && formData.latitude && <small style={{ color: 'var(--color-primary-600)' }}>✓ Auto-filled from map (editable)</small>}
+                            </div>
+
+                            {/* Address */}
+                            <div className="form-group full-width">
+                                <label>Address *</label>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={formData.address}
+                                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                                    required
+                                    placeholder="Andheri West, Mumbai, Maharashtra"
+                                />
+                                {formData.address && formData.latitude && <small style={{ color: 'var(--color-primary-600)' }}>✓ Auto-filled from map (editable)</small>}
+                            </div>
+
+                            {/* Map Picker Toggle */}
+                            <div className="form-group full-width">
+                                <div className="map-toggle-container">
+                                    <button
+                                        type="button"
+                                        onClick={() => setUseMapPicker(!useMapPicker)}
+                                        className="btn btn-outline btn-sm"
+                                    >
+                                        {useMapPicker ? '✍️ Switch to Manual Entry' : '🗺️ Use Map Picker'}
+                                    </button>
+                                    <span className="map-toggle-label">
+                                        {useMapPicker ? 'Click on the map to auto-fill location' : 'Enter coordinates manually below'}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Map Component */}
+                            {useMapPicker && (
+                                <div className="form-group full-width">
+                                    <MapLocationPicker
+                                        latitude={parseFloat(formData.latitude) || null}
+                                        longitude={parseFloat(formData.longitude) || null}
+                                        onLocationSelect={handleMapLocationSelect}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Lat / Lng */}
+                            <div className="form-group">
+                                <label>Latitude *</label>
+                                <input
+                                    type="number"
+                                    step="0.000001"
+                                    className="input"
+                                    value={formData.latitude}
+                                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                                    required
+                                    placeholder="19.1234"
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Longitude *</label>
+                                <input
+                                    type="number"
+                                    step="0.000001"
+                                    className="input"
+                                    value={formData.longitude}
+                                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                                    required
+                                    placeholder="72.8367"
+                                />
+                            </div>
+
+                            {/* Settings */}
+                            <div className="form-group">
+                                <label>Check-in Radius (meters)</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={formData.checkInRadius}
+                                    onChange={(e) => setFormData({ ...formData, checkInRadius: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Max Physical Vehicles</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={formData.maxPhysicalVehicles}
+                                    onChange={(e) => setFormData({ ...formData, maxPhysicalVehicles: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Grace Window (minutes)</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    value={formData.graceWindowMinutes}
+                                    onChange={(e) => setFormData({ ...formData, graceWindowMinutes: e.target.value })}
+                                    required
+                                />
+                            </div>
+
+                            {/* Owner Details (add only) */}
+                            {!editingStation && (
+                                <>
+                                    <div className="form-section-title">
+                                        <h4>👤 Station Owner Details</h4>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Owner Name *</label>
+                                        <input
+                                            type="text"
+                                            className="input"
+                                            value={formData.ownerName}
+                                            onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                                            required
+                                            placeholder="e.g. Rajesh Kumar"
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Owner Phone *</label>
+                                        <div className="phone-input-wrapper">
+                                            <span className="phone-prefix">+91</span>
+                                            <input
+                                                type="tel"
+                                                className="input"
+                                                value={formData.ownerPhone}
+                                                onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                                                required
+                                                placeholder="9876543210"
+                                                maxLength={10}
+                                            />
+                                        </div>
+                                        <small>Enter owner's 10-digit mobile number</small>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ─ Form Footer ─ */}
                     <div className="form-actions">
                         <button type="submit" className="btn btn-primary" disabled={loading}>
-                            {loading ? 'Saving...' : (editingStation ? 'Update Station' : 'Create Station')}
+                            {loading ? 'Saving…' : (editingStation ? '✓ Update Station' : '+ Create Station')}
                         </button>
                         <button type="button" onClick={resetForm} className="btn btn-outline">
                             Cancel
                         </button>
                     </div>
                 </form>
+
             )}
 
             <div className="stations-list">
@@ -468,17 +526,26 @@ const StationManagement = () => {
                                 <div className="station-item-header">
                                     <h3>{station.name}</h3>
                                     <div className="station-badges">
-                                        {station.gasOn && <span className="badge success">Gas ON</span>}
-                                        {station.bookingOn && <span className="badge info">Booking ON</span>}
+                                        {station.isSuspended && <span className="badge" style={{background:'#ef4444',color:'#fff'}}>🚫 Suspended</span>}
+                                        {!station.isSuspended && station.gasOn && <span className="badge success">Gas ON</span>}
+                                        {!station.isSuspended && station.bookingOn && <span className="badge info">Booking ON</span>}
                                     </div>
                                 </div>
 
                                 <div className="station-item-body">
-                                    <p><strong>ID:</strong> {station.stationId}</p>
-                                    <p><strong>Address:</strong> {station.address}</p>
-                                    <p><strong>Location:</strong> {station.location.latitude}, {station.location.longitude}</p>
-                                    <p><strong>Check-in Radius:</strong> {station.checkInRadius}m</p>
-                                    <p><strong>Served:</strong> {station.totalVehiclesServed || 0} vehicles</p>
+                                    <p><strong>ID</strong><span className="val-id">{station.stationId}</span></p>
+                                    <p><strong>Address</strong><span className="val-address">{station.address}</span></p>
+                                    <p><strong>Coords</strong><span className="val-coords">{station.location.latitude.toFixed(5)}, {station.location.longitude.toFixed(5)}</span></p>
+                                    <div className="station-item-stats">
+                                        <div className="station-stat-chip">
+                                            <span className="chip-val">{station.checkInRadius}m</span>
+                                            <span className="chip-label">Check-in Radius</span>
+                                        </div>
+                                        <div className="station-stat-chip">
+                                            <span className="chip-val">{station.totalVehiclesServed || 0}</span>
+                                            <span className="chip-label">Vehicles Served</span>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div className="station-item-actions">
@@ -496,11 +563,11 @@ const StationManagement = () => {
                                         type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            handleDelete(station.id);
+                                            handleToggleSuspend(station);
                                         }}
-                                        className="btn btn-danger btn-sm"
+                                        className={`btn btn-sm ${station.isSuspended ? 'btn-outline' : 'btn-danger'}`}
                                     >
-                                        Delete
+                                        {station.isSuspended ? '✅ Unsuspend' : '🚫 Suspend'}
                                     </button>
                                 </div>
                             </div>

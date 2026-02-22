@@ -1,0 +1,616 @@
+/* ================================================================
+   SMART CNG — Motion Design System
+   Government Smart Infrastructure × SaaS Platform
+   ----------------------------------------------------------------
+   PRINCIPLES:
+   · Meaningful — every animation represents queue/fuel logic
+   · Hardware-accelerated — transform + opacity ONLY
+   · Durations: 0.2s – 0.4s (interactions) | 6–8s (ambient)
+   · Easing: ease-in-out for all transitions
+   · Zero layout shift · Zero overflow · Zero bounce/flash
+   ================================================================ */
+
+/* ================================================================
+   §1  BASE ENTRANCE ANIMATIONS
+       Fade + subtle upward motion (10px → 0)
+       Used for: page load, card mount, modal open
+   ================================================================ */
+
+/* 1a. Page load — professional entrance */
+@keyframes pageLoad {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 1b. Element reveal — slightly faster, for cards/sections */
+@keyframes revealUp {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 1c. Fade only — for overlays and status messages */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+/* 1d. Exit — page or panel leaving */
+@keyframes dismissDown {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+}
+
+/* ================================================================
+   §2  STATION CARD INTERACTION
+       Hover: lift -3px + shadow — CSS only, no JS needed
+       Applied directly on .station-card via :hover
+   ================================================================ */
+
+/* No keyframes needed — handled in component CSS via transition:
+   transform 200ms ease-in-out, box-shadow 200ms ease-in-out
+   .sc:hover → translateY(-3px) + shadow enhancement */
+
+/* Subtle card-mount stagger */
+@keyframes cardMount {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ================================================================
+   §3  TOKEN BOOKING — Button press + success state
+       Represents: booking confirmation in the queue system
+   ================================================================ */
+
+/* 3a. CTA button press feedback — brief compress */
+@keyframes btnPress {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(0.98); }
+    100% { transform: scale(1); }
+}
+
+/* 3b. Success checkmark draw — SVG stroke animation
+   Apply stroke-dasharray="60" stroke-dashoffset to the path */
+@keyframes checkDraw {
+    from {
+        stroke-dashoffset: 60;
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    to {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+}
+
+/* 3c. Token number slide up on booking success */
+@keyframes tokenReveal {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 3d. Success glow — soft green background pulse, once */
+@keyframes successGlow {
+    0%   { box-shadow: 0 0 0 0   rgba(14, 124, 91, 0);    }
+    40%  { box-shadow: 0 0 0 14px rgba(14, 124, 91, 0.1); }
+    100% { box-shadow: 0 0 0 0   rgba(14, 124, 91, 0);    }
+}
+
+/* ================================================================
+   §4  GAS PIPELINE FLOW — Active token indicator
+       Thin green line sweeping left → right
+       Represents: compressed CNG moving through pipeline
+   ================================================================ */
+
+@keyframes pipelineFlow {
+    0% {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+    }
+    85% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(200%);
+        opacity: 0;
+    }
+}
+
+/* Fueling progress sweep (inside card) */
+@keyframes fuelSweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(200%);  }
+}
+
+/* ================================================================
+   §5  ETA FUEL GAUGE — Circular SVG progress ring
+       Apply via stroke-dashoffset on SVG <circle>
+       Smooth linear drain — no jumps
+   ================================================================ */
+
+@keyframes gaugeReduce {
+    from { stroke-dashoffset: var(--gauge-from, 283); }
+    to   { stroke-dashoffset: var(--gauge-to, 0);     }
+}
+
+/* Gauge color shift when near empty */
+@keyframes gaugePulse {
+    0%, 100% { opacity: 1;    }
+    50%       { opacity: 0.65; }
+}
+
+/* ================================================================
+   §6  QUEUE MOVEMENT — Operator presses NEXT
+       Current token: fade out + scale down (compressed)
+       Next token: slide up from below
+       Orange highlight glow: 0.3s on entry
+   ================================================================ */
+
+/* 6a. Exiting token — feels like it was served/consumed */
+@keyframes queueServed {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.96);
+    }
+}
+
+/* 6b. Next token entering queue slot */
+@keyframes queueAdvance {
+    0% {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 6c. Orange highlight on newly active token — brief attention */
+@keyframes tokenHighlight {
+    0%   { box-shadow: 0 0 0 0   rgba(255, 140, 26, 0);    }
+    30%  { box-shadow: 0 0 0 8px rgba(255, 140, 26, 0.18); }
+    100% { box-shadow: 0 0 0 0   rgba(255, 140, 26, 0);    }
+}
+
+/* ================================================================
+   §7  OPERATOR PANEL — Digital number flip
+       Vertical roll: old number exits up, new enters from below
+       Mechanical — like a physical flip board scoreboard
+   ================================================================ */
+
+/* Number entering from below */
+@keyframes digitIn {
+    from {
+        opacity: 0;
+        transform: translateY(100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Number exiting upward */
+@keyframes digitOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+}
+
+/* ================================================================
+   §8  TURN NEAR ALERT — ETA ≤ 10 min
+       Token border: thin orange glow, pulses every 6s
+       Scale: 1 → 1.02 → 1 (barely perceptible)
+       Not continuous — spaced intervals
+   ================================================================ */
+
+@keyframes turnNearPulse {
+    0%,  100% {
+        box-shadow: 0 0 0 0   rgba(255, 140, 26, 0);
+        transform: scale(1);
+    }
+    25% {
+        box-shadow: 0 0 0 4px rgba(255, 140, 26, 0.2);
+        transform: scale(1.015);
+    }
+    50% {
+        box-shadow: 0 0 0 0   rgba(255, 140, 26, 0);
+        transform: scale(1);
+    }
+    /* stays static for the remaining 3/4 of the loop */
+}
+
+/* ================================================================
+   §9  STATUS INDICATOR DOTS
+       Active (green): slow 2.4s breathing pulse
+       Waiting (grey): completely static — no animation
+       Expired (red): single soft blink, then static
+   ================================================================ */
+
+/* Active — represents live CNG flow */
+@keyframes dotActive {
+    0%, 100% {
+        box-shadow: 0 0 0 0   rgba(14, 124, 91, 0.5);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(14, 124, 91, 0);
+        opacity: 0.85;
+    }
+}
+
+/* Expired — single blink only, then sits still */
+@keyframes dotExpired {
+    0%   { opacity: 1;    }
+    30%  { opacity: 0.3;  }
+    60%  { opacity: 1;    }
+    100% { opacity: 1;    }
+}
+
+/* ================================================================
+   §10  LOADING STATE — CNG Nozzle Particle Flow
+        Replaces generic spinner
+        Particles flow through nozzle outline path
+   ================================================================ */
+
+/* Nozzle icon ambient glow cycle */
+@keyframes nozzleGlow {
+    0%, 100% {
+        opacity: 0.4;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.85;
+        transform: scale(1.03);
+    }
+}
+
+/* Particle dots flowing along pipe */
+@keyframes particleFlow {
+    0% {
+        transform: translateX(-16px);
+        opacity: 0;
+    }
+    20% {
+        opacity: 1;
+    }
+    80% {
+        opacity: 1;
+    }
+    100% {
+        transform: translateX(16px);
+        opacity: 0;
+    }
+}
+
+/* Generic spin (kept for fallback compatibility) */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ================================================================
+   §HERO  BACKGROUND PRESSURE PULSE
+           Radial green breathing — very slow, very subtle
+           Never distracts from foreground text
+   ================================================================ */
+
+@keyframes heroPressure {
+    0%, 100% {
+        opacity: 0.04;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.08;
+        transform: scale(1.12);
+    }
+}
+
+/* ================================================================
+   §SKELETON  SHIMMER LOADER (infrastructure data loading)
+   ================================================================ */
+
+@keyframes dataShimmer {
+    0%   { background-position: -600px 0; }
+    100% { background-position:  600px 0; }
+}
+
+/* ================================================================
+   SECTION A — UTILITY CLASSES
+   Apply these to elements in JSX. Always use both fill-mode
+   and the precise duration that matches the category above.
+   ================================================================ */
+
+/* §1 Page & section entrance */
+.anim-page-load {
+    animation: pageLoad 0.35s ease-in-out both;
+}
+
+.anim-reveal {
+    animation: revealUp 0.3s ease-in-out both;
+}
+
+.anim-fade-in {
+    animation: fadeIn 0.25s ease-in-out both;
+}
+
+/* §2 Card stagger on mount */
+.anim-card {
+    animation: cardMount 0.3s ease-in-out both;
+}
+
+/* Stagger delays for grid-mounted cards */
+.anim-delay-1 { animation-delay: 60ms;  }
+.anim-delay-2 { animation-delay: 120ms; }
+.anim-delay-3 { animation-delay: 180ms; }
+.anim-delay-4 { animation-delay: 240ms; }
+.anim-delay-5 { animation-delay: 300ms; }
+.anim-delay-6 { animation-delay: 360ms; }
+
+/* §3 Booking flow */
+.anim-btn-press {
+    animation: btnPress 0.2s ease-in-out;
+}
+
+.anim-token-reveal {
+    animation: tokenReveal 0.35s ease-in-out both;
+}
+
+.anim-success-glow {
+    animation: successGlow 0.6s ease-in-out;
+}
+
+/* §4 Pipeline / active token */
+.anim-pipeline {
+    animation: pipelineFlow 2.2s ease-in-out infinite;
+}
+
+.anim-fuel-sweep {
+    animation: fuelSweep 1.8s ease-in-out infinite;
+}
+
+/* §5 ETA gauge */
+.anim-gauge {
+    animation: gaugeReduce var(--gauge-duration, 1s) linear both;
+}
+
+/* §6 Queue movement */
+.anim-queue-exit {
+    animation: queueServed 0.25s ease-in-out both;
+}
+
+.anim-queue-enter {
+    animation: queueAdvance 0.3s ease-in-out both;
+}
+
+.anim-token-highlight {
+    animation: tokenHighlight 0.35s ease-in-out;
+}
+
+/* §7 Operator digit flip */
+.anim-digit-in {
+    animation: digitIn 0.28s ease-in-out both;
+}
+
+.anim-digit-out {
+    animation: digitOut 0.22s ease-in-out both;
+}
+
+/* §8 Turn near alert — low frequency */
+.anim-turn-near {
+    animation: turnNearPulse 6s ease-in-out infinite;
+}
+
+/* §9 Status dots */
+.anim-dot-active {
+    animation: dotActive 2.4s ease-in-out infinite;
+}
+
+.anim-dot-waiting {
+    /* Static — no animation */
+    animation: none;
+}
+
+.anim-dot-expired {
+    animation: dotExpired 1.2s ease-in-out 1;
+    /* plays once then stops */
+}
+
+/* §10 CNG nozzle loader */
+.anim-nozzle {
+    animation: nozzleGlow 1.8s ease-in-out infinite;
+}
+
+.anim-particle {
+    animation: particleFlow 1.2s ease-in-out infinite;
+}
+
+.anim-particle:nth-child(2) { animation-delay: 0.4s; }
+.anim-particle:nth-child(3) { animation-delay: 0.8s; }
+
+/* §HERO background */
+.anim-hero-bg {
+    animation: heroPressure 7s ease-in-out infinite;
+    will-change: transform, opacity;
+    pointer-events: none;
+}
+
+/* §SKELETON data loading */
+.anim-skeleton {
+    background: linear-gradient(
+        90deg,
+        #edf2ef 0%,
+        #d8e3dd 40%,
+        #edf2ef 80%
+    );
+    background-size: 600px 100%;
+    animation: dataShimmer 1.6s ease-in-out infinite;
+    border-radius: 6px;
+}
+
+/* ================================================================
+   SECTION B — HOVER EFFECTS
+   All handled in CSS — no JS, hardware-accelerated
+   ================================================================ */
+
+/* Premium card hover — lift + shadow enhancement */
+.hover-card {
+    transition:
+        transform  200ms ease-in-out,
+        box-shadow 200ms ease-in-out;
+}
+
+.hover-card:hover {
+    transform: translateY(-3px);
+    box-shadow:
+        0 8px 24px rgba(14, 124, 91, 0.08),
+        0 2px 6px  rgba(0, 0, 0, 0.05);
+}
+
+/* Icon hover — contained scale, no bounce */
+.hover-icon {
+    transition:
+        transform 200ms ease-in-out,
+        color     200ms ease-in-out;
+}
+
+.hover-icon:hover {
+    transform: scale(1.05);
+}
+
+/* Button hover — brightness only, no size change */
+.hover-btn {
+    transition:
+        filter     180ms ease-in-out,
+        box-shadow 180ms ease-in-out;
+}
+
+.hover-btn:hover {
+    filter: brightness(1.06);
+}
+
+/* ================================================================
+   SECTION C — TRANSITION UTILITIES
+   ================================================================ */
+
+.transition-base {
+    transition: all 250ms ease-in-out;
+}
+
+.transition-color {
+    transition:
+        color            200ms ease-in-out,
+        background-color 200ms ease-in-out,
+        border-color     200ms ease-in-out;
+}
+
+.transition-transform {
+    transition: transform 200ms ease-in-out;
+}
+
+.transition-opacity {
+    transition: opacity 200ms ease-in-out;
+}
+
+.transition-shadow {
+    transition: box-shadow 200ms ease-in-out;
+}
+
+/* ================================================================
+   SECTION D — GLASSMORPHISM (hero/header areas)
+   ================================================================ */
+
+.glass {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* ================================================================
+   SECTION E — PAGE TRANSITIONS
+   ================================================================ */
+
+.page-enter {
+    animation: pageLoad 0.35s ease-in-out both;
+}
+
+.page-exit {
+    animation: dismissDown 0.25s ease-in-out both;
+}
+
+/* ================================================================
+   §PERFORMANCE  will-change hints
+   Only on frequently animated elements
+   ================================================================ */
+
+.anim-pipeline,
+.anim-fuel-sweep,
+.anim-particle,
+.anim-dot-active,
+.anim-hero-bg {
+    will-change: transform, opacity;
+}
+
+/* ================================================================
+   §REDUCED MOTION  Respect user system preference
+   All animations disabled — transitions minimal
+   ================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration:        0.01ms !important;
+        animation-iteration-count: 1      !important;
+        transition-duration:       0.01ms !important;
+    }
+
+    .anim-skeleton {
+        animation: none;
+        background: #edf2ef;
+    }
+}

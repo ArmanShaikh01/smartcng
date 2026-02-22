@@ -8,6 +8,7 @@ import StationControls from '../components/owner/StationControls';
 import Analytics from '../components/owner/Analytics';
 import VisualQueue from '../components/shared/VisualQueue';
 import OperatorManagement from '../components/owner/OperatorManagement';
+import Icon from '../components/shared/Icon';
 import './OwnerHome.css';
 
 const OwnerHome = () => {
@@ -30,8 +31,25 @@ const OwnerHome = () => {
     if (!station) {
         return (
             <div className="owner-error">
-                <h2>⚠️ Station Not Found</h2>
+                <Icon name="alertTriangle" size={40} color="#f59e0b" />
+                <h2>Station Not Found</h2>
                 <p>You are not assigned to any station. Please contact admin.</p>
+            </div>
+        );
+    }
+
+    if (station.isSuspended) {
+        return (
+            <div className="owner-home">
+                <Navbar title={`Owner - ${station.name}`} />
+                <div className="owner-error" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <Icon name="ban" size={56} color="#ef4444" />
+                    <h2 style={{ color: '#ef4444', marginBottom: '12px' }}>Station Suspended</h2>
+                    <p style={{ color: '#6b7280', maxWidth: '400px', margin: '0 auto', lineHeight: '1.6' }}>
+                        Your station <strong>"{station.name}"</strong> has been suspended by the admin.
+                        All operations are currently disabled. Please contact the administrator for more information.
+                    </p>
+                </div>
             </div>
         );
     }
@@ -58,7 +76,7 @@ const OwnerHome = () => {
                         }}
                         className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
                     >
-                        📊 Dashboard
+                        <Icon name="barChart" size={16} /> Dashboard
                     </button>
                     <button
                         type="button"
@@ -68,7 +86,7 @@ const OwnerHome = () => {
                         }}
                         className={`tab-btn ${activeTab === 'operators' ? 'active' : ''}`}
                     >
-                        👥 Operators
+                        <Icon name="users" size={16} /> Operators
                     </button>
                 </div>
 

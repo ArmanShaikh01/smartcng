@@ -40,9 +40,33 @@ const OperatorManagement = ({ stationId }) => {
         setLoading(true);
 
         try {
+            // Normalize to E.164: +91XXXXXXXXXX
+            let phone = formData.phoneNumber.trim().replace(/\s+/g, '');
+            if (!phone.startsWith('+')) {
+                phone = '+91' + phone.replace(/^0+/, '');
+            }
+            const digits = phone.replace(/\D/g, '');
+            if (digits.length < 10) {
+                alert('Please enter a valid 10-digit phone number');
+                setLoading(false);
+                return;
+            }
+            // Always store as +91XXXXXXXXXX (last 10 digits)
+            const normalized = '+91' + digits.slice(-10);
+
+            // Check if operator with this phone already exists
+            const existing = await getDocs(
+                query(collection(db, COLLECTIONS.USERS), where('phoneNumber', '==', normalized))
+            );
+            if (!existing.empty) {
+                alert('An account with this phone number already exists!');
+                setLoading(false);
+                return;
+            }
+
             const newOperator = {
                 userId: `operator_${Date.now()}`,
-                phoneNumber: formData.phoneNumber,
+                phoneNumber: normalized,
                 name: formData.name,
                 role: 'operator',
                 stationId: stationId,
@@ -55,7 +79,7 @@ const OperatorManagement = ({ stationId }) => {
 
             await addDoc(collection(db, COLLECTIONS.USERS), newOperator);
 
-            alert(`Operator created! They can login with: ${formData.phoneNumber}`);
+            alert(`Operator created! They can login with: ${normalized}`);
             setShowForm(false);
             setFormData({ phoneNumber: '', name: '' });
             fetchOperators();
@@ -97,12 +121,13 @@ const OperatorManagement = ({ stationId }) => {
                             <input
                                 type="tel"
                                 className="input"
-                                placeholder="+91 9876543210"
+                                placeholder="9876543210"
                                 value={formData.phoneNumber}
                                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                                 required
+                                maxLength={13}
                             />
-                            <small>Include country code (e.g., +91)</small>
+                            <small>Enter 10-digit mobile number (without +91)</small>
                         </div>
 
                         <div className="form-group">

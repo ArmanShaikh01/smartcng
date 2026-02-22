@@ -1,195 +1,316 @@
-/* Owner Home Styles */
+/* Owner Home — Smart CNG Brand */
+
 .owner-home {
     min-height: 100vh;
-    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    background: var(--color-neutral-50, #f8fafc);
+    display: flex;
+    flex-direction: column;
 }
 
 .owner-content {
-    max-width: 1600px;
+    flex: 1;
+    max-width: 1280px;
     margin: 0 auto;
-    padding: var(--spacing-2xl);
+    padding: 24px 20px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
+/* ── Page Header ── */
 .owner-header {
-    text-align: center;
-    margin-bottom: var(--spacing-2xl);
-    padding: var(--spacing-xl);
-    background-color: var(--bg-primary);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-md);
+    background: var(--color-neutral-0, #fff);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.owner-header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0e7c5b, #10b981);
 }
 
 .owner-header h1 {
-    font-size: var(--text-4xl);
-    color: var(--text-primary);
-    margin-bottom: var(--spacing-md);
-    text-transform: uppercase;
-    letter-spacing: 2px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-neutral-900, #111827);
+    margin: 0;
 }
 
-.station-info {
+.owner-header .station-info {
     display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
 }
 
-.station-name {
-    font-size: var(--text-xl);
+.owner-header .station-name {
     font-weight: 600;
-    color: var(--primary-color);
+    font-size: 0.9rem;
+    color: var(--color-primary-700, #047857);
+    background: rgba(14, 124, 91, 0.08);
+    padding: 4px 12px;
+    border-radius: 20px;
+    border: 1px solid rgba(14, 124, 91, 0.15);
 }
 
-.station-address {
-    font-size: var(--text-base);
-    color: var(--text-secondary);
+.owner-header .station-address {
+    font-size: 0.8rem;
+    color: var(--color-neutral-500, #6b7280);
 }
 
+/* ── Tab Bar ── */
 .owner-tabs {
     display: flex;
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-2xl);
-    background-color: var(--bg-primary);
-    padding: var(--spacing-md);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
+    gap: 4px;
+    margin-bottom: 20px;
+    background: var(--color-neutral-0, #fff);
+    padding: 5px;
+    border-radius: 50px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
 }
 
 .owner-tabs .tab-btn {
     flex: 1;
-    padding: var(--spacing-md) var(--spacing-xl);
-    background-color: transparent;
-    border: 2px solid transparent;
-    border-radius: var(--radius-md);
-    color: var(--text-secondary);
-    font-size: var(--text-base);
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    color: var(--color-neutral-500, #6b7280);
+    border-radius: 50px;
+    font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
 }
 
-.owner-tabs .tab-btn:hover {
-    background-color: var(--bg-secondary);
-    color: var(--text-primary);
+.owner-tabs .tab-btn:hover:not(.active) {
+    background: var(--color-neutral-50, #f9fafb);
+    color: var(--color-neutral-700, #374151);
 }
 
 .owner-tabs .tab-btn.active {
-    background: linear-gradient(135deg, var(--primary-color) 0%, #1d4ed8 100%);
+    background: var(--color-primary-600, #059669);
     color: white;
-    border-color: var(--primary-color);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
 }
 
-
+/* ── Dashboard Grid — 2-column layout ── */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: var(--spacing-2xl);
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    align-items: start;
 }
 
 .dashboard-main {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-2xl);
+    gap: 20px;
+    min-width: 0;
 }
 
 .dashboard-sidebar {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-2xl);
+    gap: 20px;
+    min-width: 0;
 }
 
+/* ── Queue Overview Card ── */
 .queue-overview {
-    background-color: var(--bg-primary);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
-    box-shadow: var(--shadow-md);
+    background: var(--color-neutral-0, #fff);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
 }
 
 .queue-overview h2 {
-    font-size: var(--text-xl);
-    margin-bottom: var(--spacing-lg);
-    color: var(--text-primary);
-    text-align: center;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-neutral-800, #1f2937);
+    margin: 0 0 16px 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--color-neutral-100, #e5e7eb);
 }
 
 .queue-stats-summary {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
+    gap: 12px;
 }
 
-.stat-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: var(--spacing-md);
-    background-color: var(--bg-secondary);
-    border-radius: var(--radius-md);
-}
-
-.stat-number {
-    font-size: var(--text-3xl);
-    font-weight: 700;
-    color: var(--primary-color);
-    line-height: 1;
-    margin-bottom: var(--spacing-xs);
-}
-
-.stat-text {
-    font-size: var(--text-xs);
-    color: var(--text-secondary);
+.queue-stats-summary .stat-item {
     text-align: center;
+    padding: 12px 8px;
+    background: var(--color-neutral-50, #f9fafb);
+    border-radius: 10px;
+    border: 1px solid var(--color-neutral-100, #e5e7eb);
+    transition: box-shadow 0.2s ease;
 }
 
-.owner-loading,
-.owner-error {
+.queue-stats-summary .stat-item:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.queue-stats-summary .stat-number {
+    display: block;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-primary-600, #059669);
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.queue-stats-summary .stat-text {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--color-neutral-400, #9ca3af);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ── Loading / Error ── */
+.owner-loading {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    gap: var(--spacing-lg);
-    padding: var(--spacing-2xl);
+    gap: 16px;
+    background: linear-gradient(135deg, #065f46, #059669);
+}
+
+.owner-loading p {
+    color: rgba(255,255,255,0.9);
+    font-weight: 500;
+}
+
+.owner-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    background: var(--color-neutral-50, #f8fafc);
+    gap: 12px;
     text-align: center;
+    padding: 40px 20px;
 }
 
 .owner-error h2 {
-    font-size: var(--text-3xl);
-    color: var(--danger-color);
-    margin-bottom: var(--spacing-md);
+    font-size: 1.25rem;
+    color: var(--color-neutral-800, #1f2937);
+    margin: 0;
 }
 
 .owner-error p {
-    font-size: var(--text-lg);
-    color: var(--text-secondary);
+    color: var(--color-neutral-500, #6b7280);
+    margin: 0;
+    max-width: 420px;
+    line-height: 1.6;
 }
 
-/* Mobile responsive */
-@media (max-width: 1200px) {
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+    .owner-content {
+        padding: 20px 16px;
+    }
+
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
 
-    .queue-stats-summary {
-        grid-template-columns: repeat(3, 1fr);
+    .dashboard-sidebar {
+        order: -1;
     }
 }
 
 @media (max-width: 768px) {
     .owner-content {
-        padding: var(--spacing-lg);
+        padding: 16px 12px;
+    }
+
+    .owner-header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 16px;
     }
 
     .owner-header h1 {
-        font-size: var(--text-2xl);
+        font-size: 1.15rem;
+    }
+
+    /* Scrollable tabs on mobile */
+    .owner-tabs {
+        overflow-x: auto;
+        scrollbar-width: none;
+        flex-wrap: nowrap;
+        margin-bottom: 16px;
+        padding: 4px;
+    }
+
+    .owner-tabs::-webkit-scrollbar { display: none; }
+
+    .owner-tabs .tab-btn {
+        flex-shrink: 0;
+        white-space: nowrap;
+        padding: 8px 12px;
+        font-size: 0.8rem;
+        gap: 6px;
+        min-height: 38px;
     }
 
     .queue-stats-summary {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
     }
 
-    .stat-number {
-        font-size: var(--text-2xl);
+    .queue-stats-summary .stat-number {
+        font-size: 1.35rem;
+    }
+
+    .queue-stats-summary .stat-text {
+        font-size: 0.6rem;
+    }
+
+    .queue-stats-summary .stat-item {
+        padding: 10px 4px;
+    }
+}
+
+@media (max-width: 480px) {
+    .owner-content {
+        padding: 12px 8px;
+    }
+
+    .owner-header {
+        padding: 14px 12px;
+    }
+
+    .queue-overview {
+        padding: 14px;
+    }
+
+    .queue-stats-summary {
+        grid-template-columns: repeat(3, 1fr);
     }
 }

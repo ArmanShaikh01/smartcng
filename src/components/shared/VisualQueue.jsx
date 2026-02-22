@@ -1,6 +1,10 @@
 // Visual Queue Simulation Component
+import { useState } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { useRealtimeQueue } from '../../hooks/useRealtimeQueue';
+import { markNoShow } from '../../utils/operatorLogic';
 import VehicleCard from './VehicleCard';
+import Icon from './Icon';
 import './VisualQueue.css';
 
 /**
@@ -12,6 +16,19 @@ import './VisualQueue.css';
  */
 const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) => {
     const { queue, loading, error } = useRealtimeQueue(stationId);
+    const { user } = useAuth();
+    const [noShowLoading, setNoShowLoading] = useState(null); // bookingId being processed
+
+    const handleNoShow = async (booking) => {
+        if (!confirm(`Mark ${booking.vehicleNumber} as No-Show and remove from queue?`)) return;
+
+        setNoShowLoading(booking.id);
+        const result = await markNoShow(booking.id, booking.vehicleNumber, stationId, user?.uid);
+        if (!result.success) {
+            alert('Failed to mark no-show: ' + result.error);
+        }
+        setNoShowLoading(null);
+    };
 
     if (loading) {
         return (
@@ -25,7 +42,8 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
     if (error) {
         return (
             <div className="visual-queue-error">
-                <p>⚠️ Error loading queue</p>
+                <Icon name="alertTriangle" size={32} color="#f59e0b" />
+                <p>Error loading queue</p>
                 <small>{error}</small>
             </div>
         );
@@ -34,7 +52,8 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
     if (queue.length === 0) {
         return (
             <div className="visual-queue-empty">
-                <p>📭 No vehicles in queue</p>
+                <Icon name="list" size={36} color="#d1d5db" />
+                <p>No vehicles in queue</p>
                 <small>Queue is currently empty</small>
             </div>
         );
@@ -64,7 +83,7 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
             </div>
 
             <div className="queue-list">
-                {displayQueue.map((booking, index) => (
+                {displayQueue.map((booking) => (
                     <VehicleCard
                         key={booking.id}
                         booking={booking}
@@ -72,6 +91,8 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
                         isCurrentUser={booking.customerId === currentUserId}
                         isFueling={booking.status === 'fueling'}
                         userRole={userRole}
+                        onNoShow={userRole === 'operator' ? handleNoShow : null}
+                        noShowLoading={noShowLoading === booking.id}
                     />
                 ))}
             </div>

@@ -1,6 +1,7 @@
 // Station Controls Component - Owner controls for gas and booking
 import { useState } from 'react';
 import { toggleGasStatus, toggleBookingStatus } from '../../utils/operatorLogic';
+import Icon from '../shared/Icon';
 import './StationControls.css';
 
 const StationControls = ({ station, ownerId }) => {
@@ -52,7 +53,7 @@ const StationControls = ({ station, ownerId }) => {
             <div className="controls-grid">
                 <div className="control-section">
                     <div className="control-header">
-                        <span className="control-icon">⛽</span>
+                        <span className="control-icon"><Icon name="gas" size={22} /></span>
                         <h3>Gas Status</h3>
                     </div>
                     <div className="control-body">
@@ -81,7 +82,7 @@ const StationControls = ({ station, ownerId }) => {
 
                 <div className="control-section">
                     <div className="control-header">
-                        <span className="control-icon">📝</span>
+                        <span className="control-icon"><Icon name="clipboardList" size={22} /></span>
                         <h3>Booking Status</h3>
                     </div>
                     <div className="control-body">
@@ -110,7 +111,7 @@ const StationControls = ({ station, ownerId }) => {
             </div>
 
             <div className="control-info">
-                <h4>⚠️ Important Guidelines</h4>
+                <h4><Icon name="alertTriangle" size={16} color="#b45309" /> Important Guidelines</h4>
                 <ul>
                     <li>Close booking <strong>before</strong> gas runs out to guarantee fueling for booked customers</li>
                     <li>Recommended buffer: Close booking when ~10-15 vehicles remain</li>

@@ -1,189 +1,388 @@
-/* Station List Styles */
-.station-list-container {
-    padding: var(--spacing-xl);
-    max-width: 1200px;
+/* ================================================================
+   StationList — Customer Station Selection
+   Smart CNG | Enterprise SaaS Card Design
+   BEM: .sl-* (list wrapper), .sc (card) + .sc__* (elements)
+   ================================================================ */
+
+/* ── Page wrapper ── */
+.sl-container {
+    padding: 24px 20px;
+    max-width: 1100px;
     margin: 0 auto;
+    box-sizing: border-box;
 }
 
-.station-list-container h2 {
-    font-size: var(--text-3xl);
-    margin-bottom: var(--spacing-xl);
-    color: var(--text-primary);
+/* ── Page heading ── */
+.sl-heading {
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #111827;
+    margin: 0 0 14px 0;
 }
 
-/* Location notice banner */
-.location-notice {
-    padding: var(--spacing-md);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-lg);
-    background-color: rgba(251, 191, 36, 0.1);
-    border: 1px solid rgba(251, 191, 36, 0.3);
-}
-
-.location-notice.success {
-    background-color: rgba(34, 197, 94, 0.1);
-    border-color: rgba(34, 197, 94, 0.3);
-}
-
-.location-notice p {
-    margin: 0;
-    font-size: var(--text-sm);
-    color: var(--text-primary);
+/* ── Location banner ── */
+.sl-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-radius: 8px;
+    margin-bottom: 18px;
+    font-size: 0.82rem;
     font-weight: 500;
+    line-height: 1.4;
 }
 
-.station-grid {
+.sl-banner.success {
+    background: rgba(14, 124, 91, 0.05);
+    border: 1px solid rgba(14, 124, 91, 0.18);
+    color: #065f46;
+}
+
+.sl-banner.warning {
+    background: #fffbeb;
+    border: 1px solid rgba(217, 119, 6, 0.2);
+    color: #b45309;
+}
+
+/* ── Cards grid ── */
+.sl-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-lg);
+    gap: 16px;
+    align-items: start;   /* cards don't equal-height stretch */
 }
 
-.station-card {
-    background-color: var(--bg-primary);
-    border: 2px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-xl);
+/* ── State screen (loading/error/empty) ── */
+.sl-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    gap: 14px;
+    text-align: center;
+    padding: 40px 20px;
+    color: #6b7280;
+    font-size: 0.9rem;
+}
+
+.sl-spinner {
+    width: 30px;
+    height: 30px;
+    border: 2.5px solid rgba(14, 124, 91, 0.12);
+    border-top-color: #0E7C5B;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.sl-retry-btn {
+    padding: 8px 20px;
+    border-radius: 8px;
+    border: 1.5px solid rgba(14, 124, 91, 0.3);
+    background: transparent;
+    color: #0E7C5B;
+    font-size: 0.82rem;
+    font-weight: 700;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+}
+
+/* ================================================================
+   STATION CARD  (.sc)
+   ================================================================ */
+
+.sc {
+    background: #ffffff;
+    border: 1.5px solid #e5e7ec;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
     position: relative;
+    overflow: hidden;
+
+    /* Vertical stack — use gap for spacing */
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    transition: transform 200ms ease-out,
+                box-shadow  200ms ease-out,
+                border-color 200ms ease-out;
+}
+
+/* Hover — lift */
+.sc:hover:not(.sc--disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(14, 124, 91, 0.11);
+    border-color: rgba(14, 124, 91, 0.4);
+}
+
+/* Nearest card highlight */
+.sc--nearest {
+    border-color: rgba(14, 124, 91, 0.38);
+    box-shadow: 0 4px 14px rgba(14, 124, 91, 0.09);
+}
+
+/* Disabled */
+.sc--disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #f9fafb;
+}
+
+/* Top green accent line (hover reveal) */
+.sc::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #0E7C5B, #0E9B72);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 250ms ease-out;
+}
+
+.sc:hover:not(.sc--disabled)::before {
+    transform: scaleX(1);
+}
+
+/* ================================================================
+   CARD HEADER — icon | name+tags | gas badge
+   Three items on one row, no overlap
+   ================================================================ */
+
+.sc__header {
+    display: flex;
+    align-items: flex-start;  /* align to top so tall names don't shift icon */
+    gap: 12px;
+    /* No flex-wrap: each child has explicit width control */
+}
+
+/* ── Left: Icon circle ── */
+.sc__icon {
+    /* Fixed size, never shrinks */
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 10px;
+    background: rgba(14, 124, 91, 0.08);
+    border: 1.5px solid rgba(14, 124, 91, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #0E7C5B;
+}
+
+/* ── Center: name + status tags ── */
+.sc__meta {
+    flex: 1;
+    min-width: 0;          /* REQUIRED for text-overflow to work */
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sc__name {
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    line-height: 1.35;
+
+    /* Clamp to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
-.station-card:hover:not(.disabled) {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-xl);
-    border-color: var(--primary-color);
-}
-
-.station-card.disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.station-header {
+.sc__tags {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.sc__tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    border-radius: 20px;
+    padding: 2px 8px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.sc__tag--nearest {
+    background: rgba(14, 124, 91, 0.08);
+    color: #0E7C5B;
+    border: 1px solid rgba(14, 124, 91, 0.18);
+}
+
+.sc__tag--open {
+    background: rgba(14, 124, 91, 0.06);
+    color: #0E7C5B;
+    border: 1px solid rgba(14, 124, 91, 0.15);
+}
+
+.sc__tag--closed {
+    background: rgba(220, 38, 38, 0.06);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.15);
+}
+
+/* ── Right: Gas badge ── */
+.sc__gas {
+    flex-shrink: 0;       /* never compress */
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    white-space: nowrap;
+    line-height: 1;
+    align-self: flex-start;  /* align to top of header row */
+}
+
+.sc__gas--on {
+    background: rgba(14, 124, 91, 0.08);
+    color: #0E7C5B;
+    border: 1px solid rgba(14, 124, 91, 0.2);
+}
+
+.sc__gas--off {
+    background: rgba(220, 38, 38, 0.06);
+    color: #dc2626;
+    border: 1px solid rgba(220, 38, 38, 0.18);
+}
+
+/* ================================================================
+   ADDRESS ROW
+   ================================================================ */
+
+.sc__address {
+    display: flex;
     align-items: flex-start;
-    margin-bottom: var(--spacing-md);
+    gap: 8px;
+    background: #f8fafc;
+    border: 1px solid #edf2f7;
+    border-radius: 8px;
+    padding: 10px 12px;
+    /* No min-height — let text determine height */
 }
 
-.station-header h3 {
-    font-size: var(--text-xl);
-    color: var(--text-primary);
-    margin: 0;
-    flex: 1;
+.sc__address svg {
+    flex-shrink: 0;
+    margin-top: 2px;
 }
 
-.station-status {
+.sc__address-text {
+    font-size: 0.78rem;
+    color: #6b7280;
+    line-height: 1.5;
+    min-width: 0;
+
+    /* Clamp to 2 lines */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+/* ================================================================
+   FOOTER ROW — distance left | button/unavailable right
+   ================================================================ */
+
+.sc__footer {
     display: flex;
-    flex-direction: column;
-    gap: var(--spacing-xs);
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #edf2f7;
+    flex-wrap: wrap;        /* wrap button below on very small screens */
 }
 
-.status-badge {
-    padding: var(--spacing-xs) var(--spacing-sm);
-    border-radius: var(--radius-sm);
-    font-size: var(--text-xs);
+.sc__info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sc__dist {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
     font-weight: 600;
+    color: #374151;
     white-space: nowrap;
 }
 
-.status-badge.success {
-    background-color: rgba(34, 197, 94, 0.1);
-    color: var(--success-color);
-}
-
-.status-badge.danger {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: var(--danger-color);
-}
-
-.station-info {
-    margin-bottom: var(--spacing-lg);
-}
-
-.station-address {
-    color: var(--text-secondary);
-    font-size: var(--text-sm);
-    line-height: 1.6;
-    margin-bottom: var(--spacing-sm);
-}
-
-/* Distance badge styles */
-.station-distance {
-    margin-top: var(--spacing-sm);
-}
-
-.distance-badge {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-md);
-    border-radius: var(--radius-md);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    background-color: rgba(37, 99, 235, 0.1);
-    color: var(--primary-color);
-}
-
-.distance-badge.nearest {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(16, 185, 129, 0.15));
-    color: var(--success-color);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-}
-
-.station-footer {
-    padding-top: var(--spacing-md);
-    border-top: 1px solid var(--border-color);
-}
-
-.booking-status {
-    font-size: var(--text-sm);
-    font-weight: 500;
-}
-
-.booking-status.open {
-    color: var(--success-color);
-}
-
-.booking-status.closed {
-    color: var(--danger-color);
-}
-
-.station-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(255, 255, 255, 0.9);
-    display: flex;
+/* ── Select button ── */
+.sc__btn {
+    flex-shrink: 0;
+    display: inline-flex;
     align-items: center;
+    gap: 6px;
+    padding: 8px 18px;
+    border-radius: 8px;
+    background: #0E7C5B;
+    color: #ffffff;
+    border: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    cursor: pointer;
+    white-space: nowrap;
+    min-width: 90px;
     justify-content: center;
-    font-weight: 600;
-    color: var(--text-secondary);
+    transition: background 150ms ease-out, transform 150ms ease-out;
 }
 
-.station-list-loading,
-.station-list-error,
-.station-list-empty {
-    display: flex;
-    flex-direction: column;
+.sc__btn:hover {
+    background: #0b6449;
+    transform: scale(1.02);
+}
+
+/* ── Unavailable text ── */
+.sc__unavailable {
+    display: inline-flex;
     align-items: center;
-    justify-content: center;
-    min-height: 400px;
-    gap: var(--spacing-lg);
+    gap: 5px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #9ca3af;
+    white-space: nowrap;
 }
 
-/* Mobile responsive */
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
 @media (max-width: 768px) {
-    .station-list-container {
-        padding: var(--spacing-lg);
-    }
+    .sl-container { padding: 14px 12px; }
+    .sl-grid      { grid-template-columns: 1fr; gap: 12px; }
 
-    .station-grid {
-        grid-template-columns: 1fr;
-    }
+    .sc           { padding: 16px; gap: 12px; }
+    .sc__name     { font-size: 0.9rem; }
+    .sc__icon     { width: 38px; height: 38px; min-width: 38px; }
+}
 
-    .station-card {
-        padding: var(--spacing-lg);
-    }
+@media (max-width: 400px) {
+    /* Stack footer items on very small phones */
+    .sc__footer   { flex-direction: column; align-items: flex-start; }
+    .sc__btn      { width: 100%; justify-content: center; }
 }

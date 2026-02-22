@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
+import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
 
 /**
  * Validate if booking is allowed
@@ -121,6 +122,15 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
             metadata: { queuePosition: newPosition }
         });
 
+        // ── Notification: booking confirmed ──────────────────────────────
+        await createNotification(
+            customerId,
+            NOTIF_TYPE.BOOKING_CONFIRMED,
+            'Token Booked Successfully',
+            `You are #${newPosition} in queue. Estimated wait: ${estimatedWaitMinutes} min.`,
+            { stationId, bookingId: bookingRef.id, vehicleNumber, queuePosition: newPosition }
+        );
+
         return {
             success: true,
             bookingId: bookingRef.id,
@@ -156,6 +166,15 @@ export const cancelBooking = async (bookingId, customerId) => {
             performedByRole: 'customer',
             timestamp: serverTimestamp()
         });
+
+        // ── Notification: booking cancelled ──────────────────────────────
+        await createNotification(
+            customerId,
+            NOTIF_TYPE.BOOKING_CANCELLED,
+            'Booking Cancelled',
+            'Your token has been cancelled. You can book a new token anytime.',
+            { bookingId }
+        );
 
         return { success: true };
     } catch (error) {

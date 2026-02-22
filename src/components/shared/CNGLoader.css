@@ -1,0 +1,101 @@
+/* ================================================================
+   CNGLoader — Purposeful CNG Nozzle Loading Component
+   Replaces generic spinner with infrastructure-themed animation
+   ================================================================ */
+
+.cng-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 40px 20px;
+}
+
+/* ── Nozzle illustration container ── */
+.cng-loader__nozzle {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: nozzleGlow 1.8s ease-in-out infinite;
+}
+
+.cng-loader__nozzle svg {
+    color: #0E7C5B;
+}
+
+/* ── Pipe track ── */
+.cng-loader__pipe {
+    position: relative;
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(14, 124, 91, 0.1);
+    overflow: hidden;
+}
+
+/* ── Particle flowing through pipe ── */
+.cng-loader__particle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 4px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, #0E7C5B, transparent);
+    animation: particleFlow 1.2s ease-in-out infinite;
+}
+
+.cng-loader__particle:nth-child(2) {
+    animation-delay: 0.4s;
+    opacity: 0.6;
+}
+
+.cng-loader__particle:nth-child(3) {
+    animation-delay: 0.8s;
+    opacity: 0.35;
+}
+
+/* ── Loading label ── */
+.cng-loader__label {
+    font-family: var(--font-heading, 'Poppins', sans-serif);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #6b7280;
+    letter-spacing: 0.04em;
+    margin: 0;
+}
+
+/* ── Size variants ── */
+.cng-loader--sm .cng-loader__nozzle { width: 36px; height: 36px; }
+.cng-loader--sm .cng-loader__pipe   { width: 56px; }
+.cng-loader--sm .cng-loader__label  { font-size: 0.75rem; }
+
+.cng-loader--lg .cng-loader__nozzle { width: 72px; height: 72px; }
+.cng-loader--lg .cng-loader__pipe   { width: 100px; height: 5px; }
+
+/* ── Full-page cover variant ── */
+.cng-loader--fullpage {
+    min-height: 100vh;
+    background: linear-gradient(140deg, #0E7C5B 0%, #0b6449 60%, #084d37 100%);
+}
+
+.cng-loader--fullpage .cng-loader__nozzle svg {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.cng-loader--fullpage .cng-loader__pipe {
+    background: rgba(255, 255, 255, 0.12);
+    width: 90px;
+}
+
+.cng-loader--fullpage .cng-loader__particle {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.85), transparent);
+}
+
+.cng-loader--fullpage .cng-loader__label {
+    color: rgba(255, 255, 255, 0.75);
+}

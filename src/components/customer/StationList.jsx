@@ -4,6 +4,7 @@ import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import { useGeolocation, calculateDistance } from '../../hooks/useGeolocation';
+import Icon from '../shared/Icon';
 import './StationList.css';
 
 const StationList = ({ onSelectStation }) => {
@@ -30,17 +31,15 @@ const StationList = ({ onSelectStation }) => {
             await getLocation();
         } catch (err) {
             console.log('Location access denied or unavailable:', err);
-            // Continue without location - stations will show unsorted
         }
     };
 
     const fetchStations = async () => {
         try {
             const stationsSnapshot = await getDocs(collection(db, COLLECTIONS.STATIONS));
-            const stationsData = stationsSnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
+            const stationsData = stationsSnapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter(s => !s.isSuspended);
             setStations(stationsData);
             setLoading(false);
         } catch (err) {
@@ -53,30 +52,24 @@ const StationList = ({ onSelectStation }) => {
     const sortStationsByDistance = () => {
         const stationsWithDistance = stations.map(station => {
             const distance = calculateDistance(
-                location.latitude,
-                location.longitude,
-                station.location.latitude,
-                station.location.longitude
+                location.latitude, location.longitude,
+                station.location.latitude, station.location.longitude
             );
             return { ...station, distance };
         });
-
-        // Sort by distance (nearest first)
         stationsWithDistance.sort((a, b) => a.distance - b.distance);
         setStations(stationsWithDistance);
     };
 
     const formatDistance = (meters) => {
-        if (meters < 1000) {
-            return `${Math.round(meters)} m`;
-        }
+        if (meters < 1000) return `${Math.round(meters)} m`;
         return `${(meters / 1000).toFixed(1)} km`;
     };
 
     if (loading) {
         return (
-            <div className="station-list-loading">
-                <div className="spinner"></div>
+            <div className="sl-state">
+                <div className="sl-spinner" />
                 <p>Loading stations...</p>
             </div>
         );
@@ -84,16 +77,10 @@ const StationList = ({ onSelectStation }) => {
 
     if (error) {
         return (
-            <div className="station-list-error">
-                <p>⚠️ {error}</p>
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        fetchStations();
-                    }}
-                    className="btn btn-primary"
-                >
+            <div className="sl-state">
+                <Icon name="alertTriangle" size={32} color="#f59e0b" />
+                <p>{error}</p>
+                <button type="button" onClick={fetchStations} className="sl-retry-btn">
                     Retry
                 </button>
             </div>
@@ -102,75 +89,112 @@ const StationList = ({ onSelectStation }) => {
 
     if (stations.length === 0) {
         return (
-            <div className="station-list-empty">
+            <div className="sl-state">
+                <Icon name="station" size={32} color="#9ca3af" />
                 <p>No stations available</p>
             </div>
         );
     }
 
     return (
-        <div className="station-list-container">
-            <h2>Select CNG Station</h2>
+        <div className="sl-container anim-page-load">
+            <h2 className="sl-heading">Select CNG Station</h2>
 
-            {locationError && (
-                <div className="location-notice">
-                    <p>📍 Location access denied. Showing all stations.</p>
-                </div>
-            )}
-
+            {/* Location banner */}
             {location && (
-                <div className="location-notice success">
-                    <p>✅ Showing stations sorted by distance from your location</p>
+                <div className="sl-banner success anim-fade-in">
+                    <Icon name="mapPin" size={14} color="#0E7C5B" />
+                    <span>Showing stations sorted by distance from your location</span>
+                </div>
+            )}
+            {locationError && !location && (
+                <div className="sl-banner warning anim-fade-in">
+                    <Icon name="alertTriangle" size={14} color="#b45309" />
+                    <span>Location unavailable. Showing all stations.</span>
                 </div>
             )}
 
-            <div className="station-grid">
-                {stations.map((station, index) => (
-                    <div
-                        key={station.id}
-                        className={`station-card ${!station.gasOn || !station.bookingOn ? 'disabled' : ''}`}
-                        onClick={() => station.gasOn && station.bookingOn && onSelectStation(station)}
-                    >
-                        <div className="station-header">
-                            <h3>{station.name}</h3>
-                            <div className="station-status">
-                                {station.gasOn ? (
-                                    <span className="status-badge success">⛽ Gas ON</span>
+            {/* Station cards grid */}
+            <div className="sl-grid">
+                {stations.map((station, index) => {
+                    const isAvailable = station.gasOn && station.bookingOn;
+                    const isNearest = index === 0 && station.distance !== undefined;
+                    // Stagger delay capped at 6 cards (360ms max)
+                    const staggerClass = index < 6 ? `anim-delay-${index + 1}` : '';
+
+                    return (
+                        <div
+                            key={station.id}
+                            className={`sc anim-card ${staggerClass} ${isNearest ? 'sc--nearest' : ''} ${!isAvailable ? 'sc--disabled' : ''}`}
+                            onClick={() => isAvailable && onSelectStation(station)}
+                            role="button"
+                            tabIndex={isAvailable ? 0 : -1}
+                        >
+                            {/* ── Top row: icon | name+tags | gas badge ── */}
+                            <div className="sc__header">
+                                {/* Left: icon */}
+                                <div className="sc__icon">
+                                    <Icon name="station" size={22} color="#0E7C5B" />
+                                </div>
+
+                                {/* Center: name + tags */}
+                                <div className="sc__meta">
+                                    <h3 className="sc__name">{station.name}</h3>
+                                    <div className="sc__tags">
+                                        {isNearest && (
+                                            <span className="sc__tag sc__tag--nearest">
+                                                Nearest
+                                            </span>
+                                        )}
+                                        <span className={`sc__tag ${station.bookingOn ? 'sc__tag--open' : 'sc__tag--closed'}`}>
+                                            {station.bookingOn ? 'Booking Open' : 'Booking Closed'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Right: gas badge */}
+                                <span className={`sc__gas ${station.gasOn ? 'sc__gas--on' : 'sc__gas--off'}`}>
+                                    <Icon name="gas" size={13} />
+                                    {station.gasOn ? 'Gas ON' : 'Gas OFF'}
+                                </span>
+                            </div>
+
+                            {/* ── Address row ── */}
+                            <div className="sc__address">
+                                <Icon name="mapPin" size={14} color="#9ca3af" />
+                                <span className="sc__address-text">{station.address}</span>
+                            </div>
+
+                            {/* ── Footer: distance + select button ── */}
+                            <div className="sc__footer">
+                                <div className="sc__info">
+                                    {station.distance !== undefined && (
+                                        <span className="sc__dist">
+                                            <Icon name="ruler" size={13} color="#6b7280" />
+                                            {formatDistance(station.distance)} away
+                                        </span>
+                                    )}
+                                </div>
+
+                                {isAvailable ? (
+                                    <button
+                                        className="sc__btn"
+                                        tabIndex={-1}
+                                        onClick={(e) => { e.stopPropagation(); onSelectStation(station); }}
+                                    >
+                                        Select
+                                        <Icon name="arrowRight" size={15} color="white" />
+                                    </button>
                                 ) : (
-                                    <span className="status-badge danger">⛽ Gas OFF</span>
+                                    <span className="sc__unavailable">
+                                        <Icon name="ban" size={14} color="#9ca3af" />
+                                        Unavailable
+                                    </span>
                                 )}
                             </div>
                         </div>
-
-                        <div className="station-info">
-                            <p className="station-address">{station.address}</p>
-
-                            {station.distance !== undefined && (
-                                <div className="station-distance">
-                                    <span className={`distance-badge ${index === 0 ? 'nearest' : ''}`}>
-                                        {index === 0 ? '📍 ' : '📏 '}
-                                        {formatDistance(station.distance)} away
-                                        {index === 0 && ' (Nearest)'}
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="station-footer">
-                            {station.bookingOn ? (
-                                <span className="booking-status open">📝 Booking Open</span>
-                            ) : (
-                                <span className="booking-status closed">📝 Booking Closed</span>
-                            )}
-                        </div>
-
-                        {(!station.gasOn || !station.bookingOn) && (
-                            <div className="station-overlay">
-                                <p>Currently Unavailable</p>
-                            </div>
-                        )}
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );

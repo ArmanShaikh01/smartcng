@@ -1,8 +1,11 @@
 // Map Location Picker Component - Google Maps integration for selecting station location
 import { useState, useCallback, useEffect } from 'react';
-import { GoogleMap, LoadScript, Marker } from '@react-google-maps/api';
+import { GoogleMap, useLoadScript, Marker } from '@react-google-maps/api';
 import { useGeolocation } from '../../hooks/useGeolocation';
 import './MapLocationPicker.css';
+
+// CRITICAL: Define libraries outside component to prevent re-initialization
+const libraries = ['places'];
 
 const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
     const [mapCenter, setMapCenter] = useState({
@@ -14,7 +17,15 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
     );
     const { location, getLocation } = useGeolocation();
     const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
-    const [mapLoadError, setMapLoadError] = useState(null);
+
+    const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
+
+    // Use useLoadScript hook instead of LoadScript component
+    const { isLoaded, loadError } = useLoadScript({
+        googleMapsApiKey: apiKey || '',
+        libraries: libraries, // Required for Places API
+        id: 'google-map-script' // Prevents multiple script loads
+    });
 
     const mapContainerStyle = {
         width: '100%',
@@ -28,6 +39,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
         streetViewControl: false,
         mapTypeControl: false,
         fullscreenControl: false,
+        gestureHandling: 'greedy', // Allows map interaction without ctrl+scroll
     };
 
     // Update map center when props change
@@ -71,18 +83,9 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
         }
     };
 
-    const handleLoadError = (error) => {
-        console.error('Google Maps Load Error:', error);
-        setMapLoadError(error);
-    };
-
-    const handleLoadSuccess = () => {
-        console.log('Google Maps loaded successfully!');
-    };
-
-    const apiKey = import.meta.env.VITE_GOOGLE_GEOLOCATION_API_KEY;
-
     console.log('MapLocationPicker - API Key present:', !!apiKey);
+    console.log('MapLocationPicker - isLoaded:', isLoaded);
+    console.log('MapLocationPicker - loadError:', loadError);
     console.log('MapLocationPicker - Current position:', { latitude, longitude });
     console.log('MapLocationPicker - Marker position:', markerPosition);
 
@@ -94,27 +97,76 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
         );
     }
 
-    if (mapLoadError) {
+    if (loadError) {
+        console.error('🗺️ Google Maps Load Error:', loadError);
+        console.error('Error details:', {
+            message: loadError?.message || 'Unknown error',
+            type: loadError?.type || 'Unknown type',
+            apiKey: apiKey ? 'Present' : 'Missing'
+        });
+
+        // Common error: Maps JavaScript API not enabled
+        if (loadError?.message?.includes('ApiNotActivatedMapError') ||
+            loadError?.message?.includes('Google Maps JavaScript API') ||
+            loadError?.message?.includes('RefererNotAllowedMapError')) {
+            console.error('⚠️ SOLUTION: Enable "Maps JavaScript API" in Google Cloud Console');
+            console.error('📍 Go to: https://console.cloud.google.com/apis/library/maps-backend.googleapis.com');
+        }
+
         return (
             <div className="map-error">
-                <h4>🗺️ Map Unavailable</h4>
-                <p><strong>The Google Maps API could not be loaded.</strong></p>
+                <h4>🗺️ Google Maps Not Loading</h4>
+                <p><strong>The map cannot be displayed because the Maps JavaScript API is not enabled.</strong></p>
                 <div className="error-details">
-                    <p>This usually means the <strong>Maps JavaScript API</strong> is not enabled for your API key.</p>
-                    <p><strong>To fix this:</strong></p>
+                    <p className="error-reason">
+                        ⚠️ Your Google Cloud project has a valid API key, but the <strong>Maps JavaScript API</strong> service is not activated.
+                    </p>
+
+                    <p><strong>🔧 Quick Fix (Takes 2 minutes):</strong></p>
                     <ol>
-                        <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
-                        <li>Select your project</li>
-                        <li>Navigate to <strong>APIs & Services → Library</strong></li>
-                        <li>Search for <strong>"Maps JavaScript API"</strong></li>
-                        <li>Click <strong>Enable</strong></li>
-                        <li>Wait a few minutes and refresh this page</li>
+                        <li>
+                            Open <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" target="_blank" rel="noopener noreferrer">
+                                <strong>Maps JavaScript API</strong> in Google Cloud Console
+                            </a> (opens in new tab)
+                        </li>
+                        <li>Click the blue <strong>"ENABLE"</strong> button</li>
+                        <li>Wait 2-5 minutes for the API to activate</li>
+                        <li>Refresh this page (Ctrl+R or F5)</li>
                     </ol>
-                    <p className="fallback-note">💡 <strong>In the meantime:</strong> You can still use manual latitude/longitude entry below to add station locations.</p>
+
+                    <div className="alternative-method">
+                        <p><strong>Alternative Method:</strong></p>
+                        <ol>
+                            <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">Google Cloud Console</a></li>
+                            <li>Select your project: <code>smartcng-c49e1</code></li>
+                            <li>Navigate to <strong>APIs & Services → Library</strong></li>
+                            <li>Search for <strong>"Maps JavaScript API"</strong></li>
+                            <li>Click <strong>Enable</strong></li>
+                        </ol>
+                    </div>
+
+                    <p className="fallback-note">
+                        💡 <strong>Can't enable the API right now?</strong><br />
+                        No problem! You can still add stations using manual latitude/longitude entry below.
+                        Use <a href="https://www.google.com/maps" target="_blank" rel="noopener noreferrer">Google Maps</a> to find coordinates.
+                    </p>
                 </div>
             </div>
         );
     }
+
+    if (!isLoaded) {
+        return (
+            <div className="map-loading">
+                <div className="spinner"></div>
+                <p>Loading Google Maps...</p>
+            </div>
+        );
+    }
+
+    console.log('✅ Google Maps loaded successfully!');
+    console.log('Map center:', mapCenter);
+    console.log('Marker position:', markerPosition);
 
     return (
         <div className="map-location-picker">
@@ -130,12 +182,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
                 <p className="map-hint">Click anywhere on the map to select location, or drag the marker</p>
             </div>
 
-            <LoadScript
-                googleMapsApiKey={apiKey}
-                onLoad={handleLoadSuccess}
-                onError={handleLoadError}
-                loadingElement={<div className="map-loading">Loading map...</div>}
-            >
+            <div style={{ width: '100%', height: '400px', overflow: 'visible', position: 'relative' }}>
                 <GoogleMap
                     mapContainerStyle={mapContainerStyle}
                     center={mapCenter}
@@ -151,7 +198,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
                         />
                     )}
                 </GoogleMap>
-            </LoadScript>
+            </div>
 
             {markerPosition && (
                 <div className="selected-location-info">
