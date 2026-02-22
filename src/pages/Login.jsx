@@ -15,6 +15,8 @@ const Login = () => {
     const [confirmationResult, setConfirmationResult] = useState(null);
     const [formLoading, setFormLoading] = useState(false);
     const [error, setError] = useState('');
+    const [resendCooldown, setResendCooldown] = useState(0); // seconds remaining
+    const cooldownRef = useRef(null);
     const [signupData, setSignupData] = useState({
         name: '',
         vehicleNumber: ''
@@ -42,6 +44,21 @@ const Login = () => {
         }
     }, [loading, user, userRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Cooldown timer countdown
+    useEffect(() => {
+        return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
+    }, []);
+
+    const startCooldown = (seconds = 30) => {
+        setResendCooldown(seconds);
+        if (cooldownRef.current) clearInterval(cooldownRef.current);
+        cooldownRef.current = setInterval(() => {
+            setResendCooldown(prev => {
+                if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
+                return prev - 1;
+            });
+        }, 1000);
+    };
 
     const handleSendOTP = async (e) => {
         e.preventDefault();
@@ -49,16 +66,12 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            // Auto-add +91 if phone number doesn't start with +
             let formattedPhone = phoneNumber.trim();
             if (!formattedPhone.startsWith('+')) {
-                // Remove any leading zeros or spaces
                 formattedPhone = formattedPhone.replace(/^0+/, '');
-                // Add +91 for Indian numbers
                 formattedPhone = '+91' + formattedPhone;
             }
 
-            // Validate phone number length (should be 10 digits after +91)
             const digitsOnly = formattedPhone.replace(/\D/g, '');
             if (digitsOnly.length < 10) {
                 setError('Please enter a valid 10-digit phone number');
@@ -69,10 +82,15 @@ const Login = () => {
             const result = await sendOTP(formattedPhone);
             setConfirmationResult(result);
             setStep('otp');
+            startCooldown(30); // prevent accidental double-send
             setFormLoading(false);
         } catch (err) {
             console.error('Error sending OTP:', err);
-            setError(err.message || 'Failed to send OTP. Please try again.');
+            if (err.code === 'auth/too-many-requests') {
+                setError('Too many attempts. Please wait a few minutes and try again.');
+            } else {
+                setError(err.message || 'Failed to send OTP. Please try again.');
+            }
             setFormLoading(false);
         }
     };
@@ -186,6 +204,7 @@ const Login = () => {
     };
 
     const handleResendOTP = async () => {
+        if (resendCooldown > 0) return; // guard — button should be disabled but double-check
         setOtp('');
         setError('');
         setFormLoading(true);
@@ -199,10 +218,15 @@ const Login = () => {
 
             const result = await sendOTP(formattedPhone);
             setConfirmationResult(result);
+            startCooldown(30);
             setFormLoading(false);
         } catch (err) {
             console.error('Error resending OTP:', err);
-            setError('Failed to resend OTP. Please try again.');
+            if (err.code === 'auth/too-many-requests') {
+                setError('Too many attempts. Please wait a few minutes.');
+            } else {
+                setError('Failed to resend OTP. Please try again.');
+            }
             setFormLoading(false);
         }
     };
@@ -316,7 +340,7 @@ const Login = () => {
                                     style={{ letterSpacing: '0.3em', textAlign: 'center', fontSize: 'var(--text-xl)' }}
                                 />
                                 <small className="form-hint">
-                                    OTP sent to +91 {phoneNumber}
+                                    OTP sent to +91 {phoneNumber}. Check SMS inbox.
                                 </small>
                             </div>
 
@@ -333,9 +357,12 @@ const Login = () => {
                                     type="button"
                                     className="btn-link"
                                     onClick={handleResendOTP}
-                                    disabled={loading}
+                                    disabled={formLoading || resendCooldown > 0}
                                 >
-                                    🔄 Resend OTP
+                                    {resendCooldown > 0
+                                        ? `🔄 Resend in ${resendCooldown}s`
+                                        : '🔄 Resend OTP'
+                                    }
                                 </button>
                                 <button
                                     type="button"
@@ -397,8 +424,7 @@ const Login = () => {
                         </form>
                     )}
 
-                    {/* reCAPTCHA container */}
-                    <div id="recaptcha-container"></div>
+                    {/* reCAPTCHA is now managed in document.body by auth.js — no div needed here */}
                 </div>
             </div>
         </div>

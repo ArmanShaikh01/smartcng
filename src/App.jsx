@@ -177,7 +177,7 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <div id="recaptcha-container"></div>
+        {/* reCAPTCHA widget is managed by auth.js directly on document.body */}
         <AppRoutes />
       </Router>
     </AuthProvider>

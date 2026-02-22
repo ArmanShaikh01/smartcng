@@ -7,44 +7,51 @@ import {
 } from 'firebase/auth';
 import { auth } from './config';
 
+// ─── reCAPTCHA container ──────────────────────────────────────────────────
+// We manage ONE container element that lives directly on document.body,
+// completely outside React's virtual DOM. This prevents two problems:
+//
+//   1. React subtree remount when replaceChild touches a React-owned node.
+//   2. Duplicate id="recaptcha-container" in App.jsx AND Login.jsx — both
+//      existed before, getElementById returned the first, Firebase rendered
+//      in the wrong / unexpected element causing page-refresh-like behaviour.
+//
+// The element is invisible (size:0, overflow:hidden) and is recreated fresh
+// on every initRecaptcha call so grecaptcha never sees a "used" node.
+// ─────────────────────────────────────────────────────────────────────────
+
+const RCAP_ID = '__rcap_widget__'; // unique, never clashes with React markup
+
+function getFreshContainer() {
+    // Remove old one if it exists
+    const old = document.getElementById(RCAP_ID);
+    if (old) old.remove();
+
+    const el = document.createElement('div');
+    el.id = RCAP_ID;
+    el.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;';
+    document.body.appendChild(el);
+    return el;
+}
+
 /**
- * Initialize reCAPTCHA verifier for phone authentication.
- *
- * Root-cause fix for "reCAPTCHA has already been rendered in this element":
- *   grecaptcha tracks widgets by DOM node reference, NOT by id string.
- *   Clearing innerHTML leaves the old node alive in grecaptcha's internal map.
- *   Solution: completely replace the old node with a brand-new element so
- *   grecaptcha has zero prior knowledge of it.
- *
- * @param {string} containerId - ID of the container element
- * @returns {RecaptchaVerifier}
+ * Initialize (or re-initialize) the invisible reCAPTCHA verifier.
+ * Safe to call multiple times; always returns a fresh verifier on a fresh node.
  */
-export const initRecaptcha = (containerId = 'recaptcha-container') => {
-    // 1. Destroy old verifier instance
+export const initRecaptcha = () => {
+    // Destroy old verifier instance first
     if (window.recaptchaVerifier) {
         try { window.recaptchaVerifier.clear(); } catch (_) { }
         window.recaptchaVerifier = null;
     }
 
-    // 2. Replace the container DOM node entirely
-    //    A fresh node has no grecaptcha history → no "already rendered" error
-    const old = document.getElementById(containerId);
-    if (old && old.parentNode) {
-        const fresh = document.createElement('div');
-        fresh.id = containerId;
-        old.parentNode.replaceChild(fresh, old);
-    }
+    // Create a fresh DOM node completely outside React
+    getFreshContainer();
 
-    // 3. Create new RecaptchaVerifier on the clean node
-    window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), containerId, {
+    window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), RCAP_ID, {
         size: 'invisible',
-        callback: () => {
-            console.log('reCAPTCHA verified');
-        },
-        'expired-callback': () => {
-            console.log('reCAPTCHA expired');
-            window.recaptchaVerifier = null;
-        }
+        callback: () => { /* reCAPTCHA solved — signInWithPhoneNumber continues */ },
+        'expired-callback': () => { window.recaptchaVerifier = null; }
     });
 
     return window.recaptchaVerifier;
@@ -52,7 +59,7 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
 
 /**
  * Send OTP to phone number
- * @param {string} phoneNumber - Phone number with country code (e.g., +919876543210)
+ * @param {string} phoneNumber - e.g. "+919876543210"
  * @returns {Promise<ConfirmationResult>}
  */
 export const sendOTP = async (phoneNumber) => {
@@ -60,7 +67,6 @@ export const sendOTP = async (phoneNumber) => {
         const appVerifier = initRecaptcha();
         // Do NOT call appVerifier.render() manually —
         // signInWithPhoneNumber triggers it internally.
-        // Calling render() first creates a stale widget that can mismatch the session.
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
@@ -72,8 +78,8 @@ export const sendOTP = async (phoneNumber) => {
 
 /**
  * Verify OTP code
- * @param {ConfirmationResult} confirmationResult - Result from sendOTP
- * @param {string} code - 6-digit OTP code
+ * @param {ConfirmationResult} confirmationResult
+ * @param {string} code - 6-digit OTP
  * @returns {Promise<UserCredential>}
  */
 export const verifyOTP = async (confirmationResult, code) => {
@@ -85,10 +91,7 @@ export const verifyOTP = async (confirmationResult, code) => {
     }
 };
 
-/**
- * Sign out current user
- * @returns {Promise<void>}
- */
+/** Sign out current user */
 export const signOut = async () => {
     try {
         await firebaseSignOut(auth);
@@ -98,8 +101,5 @@ export const signOut = async () => {
     }
 };
 
-/**
- * Get current user
- * @returns {User | null}
- */
+/** Get current authenticated user */
 export const getCurrentUser = () => auth.currentUser;
