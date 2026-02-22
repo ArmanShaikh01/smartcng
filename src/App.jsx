@@ -1,15 +1,19 @@
 // Main App component with role-based routing
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
-import Login from './pages/Login';
-import CustomerHome from './pages/CustomerHome';
-import OperatorHome from './pages/OperatorHome';
-import OwnerHome from './pages/OwnerHome';
-import AdminHome from './pages/AdminHome';
-import Profile from './pages/Profile';
-import History from './pages/History';
-import Notifications from './pages/Notifications';
-import Help from './pages/Help';
+
+// Lazy-loaded pages — reduces initial bundle size
+const Login = lazy(() => import('./pages/Login'));
+const CustomerHome = lazy(() => import('./pages/CustomerHome'));
+const OperatorHome = lazy(() => import('./pages/OperatorHome'));
+const OwnerHome = lazy(() => import('./pages/OwnerHome'));
+const AdminHome = lazy(() => import('./pages/AdminHome'));
+const Profile = lazy(() => import('./pages/Profile'));
+const History = lazy(() => import('./pages/History'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Help = lazy(() => import('./pages/Help'));
+const Offline = lazy(() => import('./pages/Offline'));
 import './App.css';
 
 // Protected route wrapper
@@ -65,98 +69,103 @@ const RoleBasedHome = () => {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<RoleBasedHome />} />
+    <Suspense fallback={<div className="loading-screen"><div className="spinner"></div><p>Loading…</p></div>}>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/" element={<RoleBasedHome />} />
 
-      {/* Shared routes - accessible by all authenticated users */}
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/history"
-        element={
-          <ProtectedRoute allowedRoles={['customer']}>
-            <History />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/notifications"
-        element={
-          <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
-            <Notifications />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/help"
-        element={
-          <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
-            <Help />
-          </ProtectedRoute>
-        }
-      />
+        {/* Shared routes - accessible by all authenticated users */}
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute allowedRoles={['customer']}>
+              <History />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
+              <Notifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/help"
+          element={
+            <ProtectedRoute allowedRoles={['customer', 'operator', 'owner', 'admin']}>
+              <Help />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Customer routes */}
-      <Route
-        path="/customer/*"
-        element={
-          <ProtectedRoute allowedRoles={['customer']}>
-            <CustomerHome />
-          </ProtectedRoute>
-        }
-      />
+        {/* Customer routes */}
+        <Route
+          path="/customer/*"
+          element={
+            <ProtectedRoute allowedRoles={['customer']}>
+              <CustomerHome />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Operator routes */}
-      <Route
-        path="/operator/*"
-        element={
-          <ProtectedRoute allowedRoles={['operator']}>
-            <OperatorHome />
-          </ProtectedRoute>
-        }
-      />
+        {/* Operator routes */}
+        <Route
+          path="/operator/*"
+          element={
+            <ProtectedRoute allowedRoles={['operator']}>
+              <OperatorHome />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Owner routes */}
-      <Route
-        path="/owner/*"
-        element={
-          <ProtectedRoute allowedRoles={['owner']}>
-            <OwnerHome />
-          </ProtectedRoute>
-        }
-      />
+        {/* Owner routes */}
+        <Route
+          path="/owner/*"
+          element={
+            <ProtectedRoute allowedRoles={['owner']}>
+              <OwnerHome />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Admin routes */}
-      <Route
-        path="/admin/*"
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <AdminHome />
-          </ProtectedRoute>
-        }
-      />
+        {/* Admin routes */}
+        <Route
+          path="/admin/*"
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminHome />
+            </ProtectedRoute>
+          }
+        />
 
-      {/* Unauthorized */}
-      <Route
-        path="/unauthorized"
-        element={
-          <div className="unauthorized-screen">
-            <h1>Unauthorized Access</h1>
-            <p>You don't have permission to access this page.</p>
-          </div>
-        }
-      />
+        {/* Unauthorized */}
+        <Route
+          path="/unauthorized"
+          element={
+            <div className="unauthorized-screen">
+              <h1>Unauthorized Access</h1>
+              <p>You don't have permission to access this page.</p>
+            </div>
+          }
+        />
 
-      {/* 404 */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* Offline fallback route */}
+        <Route path="/offline" element={<Offline />} />
+
+        {/* 404 */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

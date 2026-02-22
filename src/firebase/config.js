@@ -1,7 +1,7 @@
 // Firebase configuration
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -20,6 +20,18 @@ const app = initializeApp(firebaseConfig);
 // Initialize services
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// ── Firestore Offline Persistence (PWA) ───────────────────────────────────
+// Allows the app to read cached Firestore data when the network is offline.
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    // Multiple tabs open — offline persistence can only be enabled in one tab at a time.
+    console.warn('[Firestore] Offline persistence failed: multiple tabs open.');
+  } else if (err.code === 'unimplemented') {
+    // Browser does not support the required IndexedDB features.
+    console.warn('[Firestore] Offline persistence not supported in this browser.');
+  }
+});
 
 // Initialize messaging only if supported (not in all browsers)
 let messaging = null;
