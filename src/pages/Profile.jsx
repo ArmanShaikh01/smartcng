@@ -1,7 +1,15 @@
 // Profile Page — Role-Aware
 import { useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+    doc, updateDoc, deleteDoc, collection,
+    query, where, getDocs, writeBatch, addDoc, serverTimestamp
+} from 'firebase/firestore';
+import {
+    reauthenticateWithPhoneNumber, RecaptchaVerifier,
+    deleteUser, signOut
+} from 'firebase/auth';
+import { db, auth } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/shared/Navbar';
@@ -10,6 +18,7 @@ import './Profile.css';
 
 const Profile = () => {
     const { user, userProfile, setUserProfile } = useAuth();
+    const navigate = useNavigate();
     const role = userProfile?.role || 'customer';
 
     const [editing, setEditing] = useState(false);
@@ -21,6 +30,13 @@ const Profile = () => {
     // Vehicle state — customer only
     const [newVehicle, setNewVehicle] = useState('');
     const [vehicleLoading, setVehicleLoading] = useState(false);
+
+    // Account deletion state
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteStep, setDeleteStep] = useState('confirm'); // confirm | otp | deleting | done
+    const [deleteError, setDeleteError] = useState('');
+    const [otpCode, setOtpCode] = useState('');
+    const [confirmResult, setConfirmResult] = useState(null);
 
     /* ── Save profile name ── */
     const handleSave = async () => {
@@ -78,19 +94,109 @@ const Profile = () => {
         }
     };
 
+    /* ── Account Deletion ── */
+    const handleRequestDelete = async () => {
+        setDeleteError('');
+        setDeleteStep('otp');
+
+        try {
+            // Set up invisible reCAPTCHA for re-auth
+            if (window._deleteRecaptcha) {
+                try { window._deleteRecaptcha.clear(); } catch (_) { }
+            }
+            window._deleteRecaptcha = new RecaptchaVerifier(auth, 'delete-recaptcha', {
+                size: 'invisible',
+            });
+            await window._deleteRecaptcha.render();
+
+            const result = await reauthenticateWithPhoneNumber(
+                auth.currentUser,
+                userProfile?.phoneNumber,
+                window._deleteRecaptcha
+            );
+            setConfirmResult(result);
+        } catch (err) {
+            console.error('Re-auth error:', err);
+            setDeleteError('Failed to send OTP. Please try again.');
+            setDeleteStep('confirm');
+        }
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!otpCode || otpCode.length < 6) {
+            setDeleteError('Enter the 6-digit OTP sent to your phone.');
+            return;
+        }
+        setDeleteStep('deleting');
+        setDeleteError('');
+
+        try {
+            // 1. Re-authenticate with OTP
+            await confirmResult.confirm(otpCode);
+
+            const uid = user.uid;
+            const batch = writeBatch(db);
+
+            // 2. Cancel active bookings
+            const activeBookingsSnap = await getDocs(
+                query(
+                    collection(db, COLLECTIONS.BOOKINGS),
+                    where('customerId', '==', uid),
+                    where('status', 'in', ['waiting', 'eligible', 'checked_in'])
+                )
+            );
+            activeBookingsSnap.forEach(bookingDoc => {
+                batch.update(bookingDoc.ref, { status: 'cancelled', updatedAt: serverTimestamp() });
+            });
+
+            // 3. Delete user Firestore document
+            batch.delete(doc(db, COLLECTIONS.USERS, uid));
+
+            await batch.commit();
+
+            // 4. Log deletion event for admin audit
+            await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
+                action: 'account_deleted',
+                performedBy: uid,
+                performedByRole: role,
+                timestamp: serverTimestamp(),
+                metadata: {
+                    phone: userProfile?.phoneNumber,
+                    name: userProfile?.name,
+                    cancelledBookings: activeBookingsSnap.size,
+                }
+            });
+
+            // 5. Delete Firebase Auth account
+            await deleteUser(auth.currentUser);
+
+            // 6. Sign out & redirect to login
+            await signOut(auth);
+            navigate('/');
+        } catch (err) {
+            console.error('Delete account error:', err);
+            if (err.code === 'auth/invalid-verification-code') {
+                setDeleteError('Invalid OTP. Please check and try again.');
+            } else {
+                setDeleteError('Deletion failed. Please try again or email support@smartcng.in');
+            }
+            setDeleteStep('otp');
+        }
+    };
+
     /* ── Role badge colors ── */
     const roleBadgeClass = {
         customer: 'role-badge--customer',
-        owner:    'role-badge--owner',
+        owner: 'role-badge--owner',
         operator: 'role-badge--operator',
-        admin:    'role-badge--admin',
+        admin: 'role-badge--admin',
     }[role] || '';
 
     const roleLabel = {
         customer: 'Customer',
-        owner:    'Station Owner',
+        owner: 'Station Owner',
         operator: 'Operator',
-        admin:    'Administrator',
+        admin: 'Administrator',
     }[role] || role;
 
     return (
@@ -314,6 +420,101 @@ const Profile = () => {
                     )}
 
                 </div>
+
+                {/* ================================================================
+                        DANGER ZONE — Account Deletion & Privacy
+                        ================================================================ */}
+                <div className="profile-section danger-zone">
+                    <h3>⚠️ Danger Zone</h3>
+
+                    <div className="danger-zone-links">
+                        <Link to="/privacy-policy" className="privacy-link" target="_blank">
+                            🔒 Privacy Policy &amp; Data Usage
+                        </Link>
+                    </div>
+
+                    {!showDeleteConfirm ? (
+                        <button
+                            type="button"
+                            className="delete-account-btn"
+                            onClick={() => { setShowDeleteConfirm(true); setDeleteStep('confirm'); }}
+                        >
+                            <Icon name="trash" size={15} color="#dc2626" /> Delete My Account
+                        </button>
+                    ) : (
+                        <div className="delete-confirm-box">
+                            {deleteStep === 'confirm' && (
+                                <>
+                                    <p className="delete-warning">
+                                        ⚠️ This is <strong>permanent and irreversible</strong>. Your account,
+                                        vehicles, and all active bookings will be deleted.
+                                    </p>
+                                    <div className="delete-actions">
+                                        <button
+                                            type="button"
+                                            className="delete-proceed-btn"
+                                            onClick={handleRequestDelete}
+                                        >
+                                            Yes, Send OTP to Confirm
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="delete-cancel-btn"
+                                            onClick={() => setShowDeleteConfirm(false)}
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+
+                            {deleteStep === 'otp' && (
+                                <>
+                                    <p className="delete-warning">
+                                        Enter the 6-digit OTP sent to <strong>{userProfile?.phoneNumber}</strong>:
+                                    </p>
+                                    <div className="otp-row">
+                                        <input
+                                            type="tel"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            placeholder="6-digit OTP"
+                                            value={otpCode}
+                                            onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                                            className="profile-input otp-input"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="delete-proceed-btn"
+                                            onClick={handleConfirmDelete}
+                                        >
+                                            Confirm Delete
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="delete-cancel-btn"
+                                        onClick={() => { setShowDeleteConfirm(false); setOtpCode(''); }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </>
+                            )}
+
+                            {deleteStep === 'deleting' && (
+                                <p className="delete-warning">🗑️ Deleting your account… please wait.</p>
+                            )}
+
+                            {deleteError && (
+                                <p className="delete-error">{deleteError}</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Invisible reCAPTCHA container for re-auth */}
+                    <div id="delete-recaptcha"></div>
+                </div>
+
             </div>
         </div>
     );

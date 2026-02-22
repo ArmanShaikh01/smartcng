@@ -14,6 +14,7 @@ const History = lazy(() => import('./pages/History'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Help = lazy(() => import('./pages/Help'));
 const Offline = lazy(() => import('./pages/Offline'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 import './App.css';
 
 // Protected route wrapper
@@ -161,6 +162,9 @@ function AppRoutes() {
 
         {/* Offline fallback route */}
         <Route path="/offline" element={<Offline />} />
+
+        {/* Public routes — no auth required */}
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
 
         {/* 404 */}
         <Route path="*" element={<Navigate to="/" replace />} />

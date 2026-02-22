@@ -1,0 +1,243 @@
+/* ══════════════════════════════════════════════
+   Privacy Policy Page Styles
+   ══════════════════════════════════════════════ */
+
+.pp-page {
+    min-height: 100vh;
+    background: #f9fafb;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ── Header ── */
+.pp-header {
+    background: linear-gradient(135deg, #0E7C5B 0%, #0a5c44 100%);
+    color: white;
+    padding: 2rem 1.5rem 1.5rem;
+}
+
+.pp-header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.pp-logo {
+    font-size: 2.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.pp-header h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 2px;
+    line-height: 1.2;
+}
+
+.pp-subtitle {
+    font-size: 0.875rem;
+    opacity: 0.85;
+    margin: 0;
+}
+
+.pp-updated {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin: 0.75rem auto 0;
+    max-width: 800px;
+    text-align: right;
+}
+
+/* ── Content ── */
+.pp-content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.pp-section {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1.75rem 0;
+}
+
+.pp-section:last-child {
+    border-bottom: none;
+}
+
+.pp-section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0E7C5B;
+    margin: 0 0 1rem;
+}
+
+.pp-section-body p {
+    color: #374151;
+    line-height: 1.7;
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+}
+
+.pp-section-body p:last-child {
+    margin-bottom: 0;
+}
+
+.pp-section-body ul {
+    padding-left: 1.25rem;
+    margin: 0.5rem 0 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.pp-section-body li {
+    color: #374151;
+    line-height: 1.6;
+    font-size: 0.9375rem;
+}
+
+.pp-section-body a {
+    color: #0E7C5B;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* ── Sub-section ── */
+.pp-subsection {
+    margin-bottom: 1.25rem;
+}
+
+.pp-subsection-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0 0 0.5rem;
+}
+
+/* ── Table ── */
+.pp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75rem 0;
+    font-size: 0.875rem;
+}
+
+.pp-table th {
+    background: #f0fdf4;
+    color: #065f46;
+    font-weight: 600;
+    text-align: left;
+    padding: 0.6rem 0.875rem;
+    border: 1px solid #d1fae5;
+}
+
+.pp-table td {
+    padding: 0.55rem 0.875rem;
+    border: 1px solid #e5e7eb;
+    color: #374151;
+    vertical-align: top;
+}
+
+.pp-table tr:nth-child(even) td {
+    background: #f9fafb;
+}
+
+/* ── Highlight box ── */
+.pp-highlight {
+    background: #ecfdf5;
+    border: 1px solid #6ee7b7;
+    border-left: 4px solid #0E7C5B;
+    border-radius: 8px;
+    padding: 0.875rem 1rem;
+    margin-bottom: 1rem;
+    color: #065f46;
+    font-size: 0.9375rem;
+}
+
+/* ── Contact card ── */
+.pp-contact-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.pp-contact-card p {
+    margin: 0 !important;
+}
+
+/* ── Footer ── */
+.pp-footer {
+    background: #f3f4f6;
+    border-top: 1px solid #e5e7eb;
+    padding: 1.5rem;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pp-footer p {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+.pp-back-link {
+    color: #0E7C5B;
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: 0.5rem 1.25rem;
+    border: 1.5px solid #0E7C5B;
+    border-radius: 100px;
+    transition: all 0.2s ease;
+}
+
+.pp-back-link:hover {
+    background: #0E7C5B;
+    color: white;
+}
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+    .pp-header {
+        padding: 1.5rem 1rem 1rem;
+    }
+
+    .pp-header h1 {
+        font-size: 1.25rem;
+    }
+
+    .pp-logo {
+        font-size: 2rem;
+    }
+
+    .pp-content {
+        padding: 1.25rem 1rem;
+    }
+
+    .pp-section {
+        padding: 1.25rem 0;
+    }
+
+    .pp-table {
+        font-size: 0.8125rem;
+        display: block;
+        overflow-x: auto;
+    }
+
+    .pp-table th,
+    .pp-table td {
+        padding: 0.5rem 0.625rem;
+    }
+}
