@@ -20,6 +20,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         scope: '/',
+        id: '/',
         start_url: '/',
         lang: 'en',
         categories: ['utilities', 'productivity'],
