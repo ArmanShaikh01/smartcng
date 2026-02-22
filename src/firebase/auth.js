@@ -8,39 +8,40 @@ import {
 import { auth } from './config';
 
 /**
- * Initialize reCAPTCHA verifier for phone authentication
- * @param {string} containerId - ID of the container element for reCAPTCHA
+ * Initialize reCAPTCHA verifier for phone authentication.
+ *
+ * Root-cause fix for "reCAPTCHA has already been rendered in this element":
+ *   grecaptcha tracks widgets by DOM node reference, NOT by id string.
+ *   Clearing innerHTML leaves the old node alive in grecaptcha's internal map.
+ *   Solution: completely replace the old node with a brand-new element so
+ *   grecaptcha has zero prior knowledge of it.
+ *
+ * @param {string} containerId - ID of the container element
  * @returns {RecaptchaVerifier}
  */
 export const initRecaptcha = (containerId = 'recaptcha-container') => {
-    // Clear existing verifier if present
+    // 1. Destroy old verifier instance
     if (window.recaptchaVerifier) {
-        try {
-            window.recaptchaVerifier.clear();
-        } catch (e) {
-            console.log('Error clearing recaptcha:', e);
-        }
+        try { window.recaptchaVerifier.clear(); } catch (_) { }
         window.recaptchaVerifier = null;
     }
 
-    // Clear the container DOM to ensure clean slate
-    const container = document.getElementById(containerId);
-    if (container) {
-        container.innerHTML = '';
+    // 2. Replace the container DOM node entirely
+    //    A fresh node has no grecaptcha history → no "already rendered" error
+    const old = document.getElementById(containerId);
+    if (old && old.parentNode) {
+        const fresh = document.createElement('div');
+        fresh.id = containerId;
+        old.parentNode.replaceChild(fresh, old);
     }
 
-    // Create new RecaptchaVerifier with correct Firebase v9+ syntax
-    // Use getAuth() to ensure we have the auth instance
-    const authInstance = getAuth();
-
-    window.recaptchaVerifier = new RecaptchaVerifier(authInstance, containerId, {
+    // 3. Create new RecaptchaVerifier on the clean node
+    window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), containerId, {
         size: 'invisible',
-        callback: (response) => {
-            // reCAPTCHA solved, allow signInWithPhoneNumber
-            console.log('reCAPTCHA verified successfully');
+        callback: () => {
+            console.log('reCAPTCHA verified');
         },
         'expired-callback': () => {
-            // Response expired, ask user to solve reCAPTCHA again
             console.log('reCAPTCHA expired');
             window.recaptchaVerifier = null;
         }
@@ -57,18 +58,12 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
 export const sendOTP = async (phoneNumber) => {
     try {
         const appVerifier = initRecaptcha();
-
-        // Render the reCAPTCHA widget
         await appVerifier.render();
-
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
         console.error('Error sending OTP:', error);
-        // Clear the verifier on error so it can be recreated
-        if (window.recaptchaVerifier) {
-            window.recaptchaVerifier = null;
-        }
+        window.recaptchaVerifier = null;
         throw error;
     }
 };
@@ -81,8 +76,7 @@ export const sendOTP = async (phoneNumber) => {
  */
 export const verifyOTP = async (confirmationResult, code) => {
     try {
-        const result = await confirmationResult.confirm(code);
-        return result;
+        return await confirmationResult.confirm(code);
     } catch (error) {
         console.error('Error verifying OTP:', error);
         throw error;
@@ -106,6 +100,4 @@ export const signOut = async () => {
  * Get current user
  * @returns {User | null}
  */
-export const getCurrentUser = () => {
-    return auth.currentUser;
-};
+export const getCurrentUser = () => auth.currentUser;
