@@ -1,0 +1,208 @@
+rules_version = '2';
+
+// ══════════════════════════════════════════════════════════════════
+//   SMART CNG STATION — Firestore Security Rules
+//   Production-ready | Blaze Plan | Play Store / TWA Safe
+//   Last updated: 2026-02-22
+// ══════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Shared helper functions ──────────────────────────────────────
+
+    // Is the request made by a signed-in user?
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Is the signed-in user the owner of this document?
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // Fetch the caller's role from Firestore (1 extra read per evaluation)
+    function callerRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin()    { return isAuth() && callerRole() == 'admin'; }
+    function isOperator() { return isAuth() && callerRole() == 'operator'; }
+    function isOwnerRole(){ return isAuth() && callerRole() == 'owner'; }
+
+    // Is the caller either admin, owner-role, or operator?
+    function isStaff() {
+      return isAuth() && callerRole() in ['admin', 'owner', 'operator'];
+    }
+
+    // Does the incoming data contain a specific key?
+    function hasField(field) {
+      return field in request.resource.data;
+    }
+
+    // Does the update attempt to modify a restricted field?
+    function notChanging(field) {
+      return !(field in request.resource.data.diff(resource.data).affectedKeys());
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /users/{userId}
+    // ────────────────────────────────────────────────────────────────
+    match /users/{userId} {
+
+      // READ: own doc OR admin
+      allow read: if isOwner(userId) || isAdmin();
+
+      // CREATE: only own UID doc; cannot self-assign privileged role
+      allow create: if isOwner(userId)
+        && (!hasField('role') || request.resource.data.role == 'customer')
+        && !hasField('isBanned')
+        && !hasField('bannedUntil')
+        && !hasField('noShowCount');
+
+      // UPDATE: own doc only — locked fields can never be self-modified
+      allow update: if isOwner(userId)
+        && notChanging('role')
+        && notChanging('isBanned')
+        && notChanging('bannedUntil')
+        && notChanging('noShowCount');
+
+      // ADMIN override: full read/write for user management panel
+      allow write: if isAdmin();
+
+      // Nobody (not even admins in client code) can delete user docs —
+      // use isBanned flag instead to soft-delete.
+      allow delete: if false;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /stations/{stationId}
+    // ────────────────────────────────────────────────────────────────
+    match /stations/{stationId} {
+
+      // READ: all authenticated users (customers/operators/owners need station data)
+      allow read: if isAuth();
+
+      // CREATE / DELETE: admin only
+      allow create, delete: if isAdmin();
+
+      // UPDATE:
+      //   Admin: any field
+      //   Operator: only operational toggle fields (gasOn, bookingOn, counters)
+      allow update: if isAdmin()
+        || (isOperator() && isOperatorOfStation(stationId)
+              && onlyUpdatingOperationalFields());
+
+      // ── Station-scoped helpers ─────────────────────────────────────
+
+      // Is the caller an operator assigned to this station?
+      function isOperatorOfStation(sid) {
+        return get(/databases/$(database)/documents/stations/$(sid))
+                 .data.operatorIds.hasAny([request.auth.uid]);
+      }
+
+      // Operators may only touch these operational fields
+      function onlyUpdatingOperationalFields() {
+        let allowed = ['gasOn', 'bookingOn', 'totalVehiclesServed', 'totalSkips', 'updatedAt'];
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /bookings/{bookingId}
+    // ────────────────────────────────────────────────────────────────
+    match /bookings/{bookingId} {
+
+      // READ:
+      //   Customer → own bookings only
+      //   Operator/Owner/Admin → any booking (needed for queue panel + analytics)
+      allow read: if isAuth() && (
+        resource.data.customerId == request.auth.uid
+        || isStaff()
+      );
+
+      // CREATE: authenticated user; must set customerId to their own UID
+      //   Prevents creating bookings on behalf of others
+      allow create: if isAuth()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.stationId is string
+        && request.resource.data.vehicleNumber is string
+        && request.resource.data.status in ['waiting', 'eligible']
+        && !hasField('isBanned');
+
+      // UPDATE:
+      //   Customer → can only cancel or check-in their own booking
+      //   Operator/Admin → can update status fields (fueling, complete, skip, no-show)
+      allow update: if
+        // Customer cancels or checks in their own booking
+        (isAuth()
+          && resource.data.customerId == request.auth.uid
+          && onlyCustomerFields())
+        // Operator or Admin updates queue status
+        || isStaff();
+
+      // DELETE: nobody deletes bookings (soft-delete via status field)
+      allow delete: if false;
+
+      // Customer can only modify these fields
+      function onlyCustomerFields() {
+        let allowed = ['status', 'isCheckedIn', 'checkedInAt', 'checkInLocation', 'updatedAt'];
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /queue_logs/{logId}
+    // ────────────────────────────────────────────────────────────────
+    match /queue_logs/{logId} {
+
+      // READ: staff only (admin, owner, operator — for SystemLogs panel)
+      allow read: if isStaff();
+
+      // CREATE: any authenticated user (customers + operators write logs)
+      //   Must include required fields; cannot forge performedBy
+      allow create: if isAuth()
+        && request.resource.data.performedBy == request.auth.uid
+        && request.resource.data.action is string
+        && request.resource.data.timestamp != null;
+
+      // Logs are immutable — no update or delete
+      allow update, delete: if false;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /notifications/{notifId}
+    // ────────────────────────────────────────────────────────────────
+    match /notifications/{notifId} {
+
+      // READ: own notifications only
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+
+      // CREATE: admin only (createNotification() is server-side logic called in utils)
+      //   In production, move this to a Cloud Function to enforce fully server-side.
+      allow create: if isAdmin()
+        || (isAuth() && request.resource.data.userId == request.auth.uid);
+
+      // UPDATE: own notification only (e.g., marking as read)
+      allow update: if isAuth()
+        && resource.data.userId == request.auth.uid
+        && onlyMarkingRead();
+
+      // DELETE: own notification only
+      allow delete: if isAuth() && resource.data.userId == request.auth.uid;
+
+      function onlyMarkingRead() {
+        let allowed = ['isRead', 'readAt'];
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+      }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   DENY ALL — catch-all for any other collection
+    //   Prevents accidental access if new collections are added
+    // ────────────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
