@@ -8,22 +8,14 @@ import {
 import { auth } from './config';
 
 // ─── reCAPTCHA container ──────────────────────────────────────────────────
-// We manage ONE container element that lives directly on document.body,
-// completely outside React's virtual DOM. This prevents two problems:
-//
-//   1. React subtree remount when replaceChild touches a React-owned node.
-//   2. Duplicate id="recaptcha-container" in App.jsx AND Login.jsx — both
-//      existed before, getElementById returned the first, Firebase rendered
-//      in the wrong / unexpected element causing page-refresh-like behaviour.
-//
-// The element is invisible (size:0, overflow:hidden) and is recreated fresh
-// on every initRecaptcha call so grecaptcha never sees a "used" node.
+// ONE container element lives on document.body, outside React's virtual DOM.
+// The verifier is initialized ONCE (on Login mount) and reused across OTP
+// sends. It is only force-recreated after an error to keep a clean slate.
 // ─────────────────────────────────────────────────────────────────────────
 
-const RCAP_ID = '__rcap_widget__'; // unique, never clashes with React markup
+const RCAP_ID = '__rcap_widget__';
 
 function getFreshContainer() {
-    // Remove old one if it exists
     const old = document.getElementById(RCAP_ID);
     if (old) old.remove();
 
@@ -34,72 +26,63 @@ function getFreshContainer() {
     return el;
 }
 
-/**
- * Initialize (or re-initialize) the invisible reCAPTCHA verifier.
- * Safe to call multiple times; always returns a fresh verifier on a fresh node.
- */
-export const initRecaptcha = () => {
-    // Destroy old verifier instance first
-    if (window.recaptchaVerifier) {
-        try { window.recaptchaVerifier.clear(); } catch (_) { }
-        window.recaptchaVerifier = null;
-    }
-
-    // Create a fresh DOM node completely outside React
+function createVerifier() {
     getFreshContainer();
-
     window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), RCAP_ID, {
         size: 'invisible',
-        callback: () => { /* reCAPTCHA solved — signInWithPhoneNumber continues */ },
+        callback: () => { /* reCAPTCHA solved automatically */ },
         'expired-callback': () => {
+            // Token expired — clear so next sendOTP creates a fresh one
             window.recaptchaVerifier = null;
-            window._rcapRendered = false;
         }
     });
-
     return window.recaptchaVerifier;
-};
+}
 
 /**
- * Pre-render reCAPTCHA while user types phone number so OTP is faster.
- * Safe to call multiple times — only renders once.
+ * Call this ONCE when the Login component mounts.
+ * Creates the invisible reCAPTCHA verifier and pre-renders it so it is
+ * ready the moment the user clicks "Send OTP", eliminating the delay.
  */
-export const warmupRecaptcha = async () => {
+export const initRecaptcha = async () => {
     try {
-        if (window._rcapRendered) return;          // already warmed up
-        if (!window.recaptchaVerifier) initRecaptcha();
-        await window.recaptchaVerifier.render();   // contact Google servers early
-        window._rcapRendered = true;
-    } catch (_) {
-        // warmup failure is non-fatal — sendOTP will retry
-        window._rcapRendered = false;
+        // Avoid double-init if already set up
+        if (window.recaptchaVerifier) return;
+        const verifier = createVerifier();
+        await verifier.render(); // contact Google servers early → faster OTP
+    } catch (err) {
+        // Non-fatal on init; sendOTP will retry
+        window.recaptchaVerifier = null;
+        console.warn('[reCAPTCHA] pre-init failed, will retry on send:', err.message);
     }
 };
 
 /**
- * Send OTP to phone number
+ * Send OTP to phone number.
+ * Reuses the already-initialized verifier. Only creates a new one if the
+ * previous attempt errored out and cleared it.
  * @param {string} phoneNumber - e.g. "+919876543210"
  * @returns {Promise<ConfirmationResult>}
  */
 export const sendOTP = async (phoneNumber) => {
     try {
-        // Always start with a fresh verifier for each OTP send.
-        // initRecaptcha() clears the old verifier + DOM node internally,
-        // so this is safe and avoids "used" reCAPTCHA token errors.
-        initRecaptcha();
-        window._rcapRendered = false;
+        // Use existing verifier or create a fresh one (e.g., after a prior error)
+        if (!window.recaptchaVerifier) {
+            createVerifier();
+        }
 
         const appVerifier = window.recaptchaVerifier;
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
         console.error('Error sending OTP:', error);
-        // Clean up so the next attempt gets a completely fresh start
+        // Destroy on failure so the next attempt gets a clean verifier
         if (window.recaptchaVerifier) {
             try { window.recaptchaVerifier.clear(); } catch (_) { }
             window.recaptchaVerifier = null;
         }
-        window._rcapRendered = false;
+        const el = document.getElementById(RCAP_ID);
+        if (el) el.remove();
         throw error;
     }
 };

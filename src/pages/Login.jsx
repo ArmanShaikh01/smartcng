@@ -1,7 +1,7 @@
 // Login page with Phone OTP and Signup
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sendOTP, verifyOTP, warmupRecaptcha } from '../firebase/auth';
+import { sendOTP, verifyOTP, initRecaptcha } from '../firebase/auth';
 import { COLLECTIONS } from '../firebase/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -55,8 +55,10 @@ const Login = () => {
         }
     }, [loading, user, userRole, profileResolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Cooldown timer countdown
+    // Initialize invisible reCAPTCHA once when Login mounts.
+    // Pre-rendering it here means it's ready the moment user clicks "Send OTP".
     useEffect(() => {
+        initRecaptcha();
         return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
     }, []);
 
@@ -276,8 +278,6 @@ const Login = () => {
                                         value={phoneNumber}
                                         onChange={(e) => {
                                             setPhoneNumber(e.target.value);
-                                            // Warm up reCAPTCHA as soon as first digit is typed
-                                            if (e.target.value.length === 1) warmupRecaptcha();
                                         }}
                                         required
                                         disabled={formLoading}
