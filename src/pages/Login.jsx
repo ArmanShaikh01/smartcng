@@ -26,10 +26,10 @@ const Login = () => {
     // ── Role-aware redirect helper ──────────────────────────────
     const navigateByRole = (role) => {
         switch (role) {
-            case 'admin':    return navigate('/admin',    { replace: true });
-            case 'owner':    return navigate('/owner',    { replace: true });
+            case 'admin': return navigate('/admin', { replace: true });
+            case 'owner': return navigate('/owner', { replace: true });
             case 'operator': return navigate('/operator', { replace: true });
-            default:         return navigate('/customer', { replace: true });
+            default: return navigate('/customer', { replace: true });
         }
     };
 
@@ -96,7 +96,7 @@ const Login = () => {
 
             let existingUserDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
 
-            // Backward-compat: try matching last 10 digits for old records saved without +91 or with spaces
+            // Backward-compat: try matching last 10 digits
             if (!existingUserDoc) {
                 const last10 = firebaseUser.phoneNumber.replace(/\D/g, '').slice(-10);
                 const allUsersSnap = await getDocs(usersRef);
@@ -108,24 +108,18 @@ const Login = () => {
             }
 
             if (existingUserDoc) {
-                // User exists (created by admin/owner or previously)
                 const existingUser = existingUserDoc.data();
-
-                // Update the userId to match Firebase Auth UID & normalize phone
                 const { updateDoc } = await import('firebase/firestore');
                 await updateDoc(existingUserDoc.ref, {
                     userId: firebaseUser.uid,
-                    phoneNumber: firebaseUser.phoneNumber // normalize stored number
+                    phoneNumber: firebaseUser.phoneNumber
                 });
-
                 setUserProfile(existingUser);
                 setUserRole(existingUser.role);
                 setFormLoading(false);
                 navigateByRole(existingUser.role);
             } else {
-                // Check by UID (for backward compatibility)
                 const userDoc = await getDocument(COLLECTIONS.USERS, firebaseUser.uid);
-
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
                     setUserProfile(userData);
@@ -133,17 +127,25 @@ const Login = () => {
                     setFormLoading(false);
                     navigateByRole(userData.role);
                 } else {
-                    // New user - show signup form
+                    // New user — go to signup (user is already signed in via Firebase Auth)
                     setFormLoading(false);
                     setStep('signup');
                 }
             }
         } catch (err) {
             console.error('Error verifying OTP:', err);
-            setError('Invalid OTP. Please try again.');
+            // Give specific message for wrong code vs other errors
+            if (err.code === 'auth/invalid-verification-code') {
+                setError('Wrong OTP. Please check the SMS and try again.');
+            } else if (err.code === 'auth/code-expired') {
+                setError('OTP expired. Please request a new one.');
+            } else {
+                setError('Verification failed. Please try again.');
+            }
             setFormLoading(false);
         }
     };
+
 
     const handleSignup = async (e) => {
         e.preventDefault();
@@ -151,7 +153,10 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            const firebaseUser = user || (await verifyOTP(confirmationResult, otp)).user;
+            // user is already authenticated at this point (verifyOTP succeeded in prev step)
+            // DO NOT call verifyOTP again — confirmationResult is already consumed
+            const firebaseUser = user;
+            if (!firebaseUser) throw new Error('Session expired. Please log in again.');
 
             const newUserData = {
                 userId: firebaseUser.uid,
@@ -167,7 +172,6 @@ const Login = () => {
                 createdAt: new Date()
             };
 
-            // Use setDoc with Firebase UID as document ID to prevent duplicates
             await setDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid), newUserData);
 
             setUserProfile(newUserData);
@@ -176,7 +180,7 @@ const Login = () => {
             navigateByRole('customer');
         } catch (err) {
             console.error('Error creating user:', err);
-            setError('Failed to create account. Please try again.');
+            setError(err.message || 'Failed to create account. Please try again.');
             setFormLoading(false);
         }
     };
@@ -209,7 +213,7 @@ const Login = () => {
             {/* ── Left Branding Panel (desktop only) ── */}
             <div className="login-branding">
                 <div className="login-brand-logo">
-                    <img src="/smartcng-logo.jpeg" alt="Smart CNG" style={{ height: 72, objectFit: 'contain' }} onError={(e) => { e.target.style.display='none'; }} />
+                    <img src="/smartcng-logo.jpeg" alt="Smart CNG" style={{ height: 72, objectFit: 'contain' }} onError={(e) => { e.target.style.display = 'none'; }} />
                 </div>
                 <h1 className="login-brand-title">
                     Smart <span>CNG</span><br />Station
@@ -243,7 +247,7 @@ const Login = () => {
 
                     {/* Header */}
                     <div className="login-header">
-                        <img src="/smartcng-logo.jpeg" alt="Smart CNG" className="login-header-logo" style={{ height: 48, objectFit: 'contain', marginBottom: 4 }} onError={(e) => { e.target.style.display='none'; }} />
+                        <img src="/smartcng-logo.jpeg" alt="Smart CNG" className="login-header-logo" style={{ height: 48, objectFit: 'contain', marginBottom: 4 }} onError={(e) => { e.target.style.display = 'none'; }} />
                         <h1>CNG Station</h1>
                         <p>Smart Queue Management</p>
                     </div>
@@ -318,10 +322,10 @@ const Login = () => {
 
                             <button
                                 type="submit"
-                                className={`btn btn-primary btn-block ${loading ? 'btn-loading' : ''}`}
-                                disabled={loading || otp.length !== 6}
+                                className={`btn btn-primary btn-block ${formLoading ? 'btn-loading' : ''}`}
+                                disabled={formLoading || otp.length !== 6}
                             >
-                                {loading ? 'Verifying…' : 'Verify OTP →'}
+                                {formLoading ? 'Verifying…' : 'Verify OTP →'}
                             </button>
 
                             <div className="form-actions">

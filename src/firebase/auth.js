@@ -58,7 +58,9 @@ export const initRecaptcha = (containerId = 'recaptcha-container') => {
 export const sendOTP = async (phoneNumber) => {
     try {
         const appVerifier = initRecaptcha();
-        await appVerifier.render();
+        // Do NOT call appVerifier.render() manually —
+        // signInWithPhoneNumber triggers it internally.
+        // Calling render() first creates a stale widget that can mismatch the session.
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
