@@ -157,9 +157,9 @@ const Login = () => {
                 stationId: null,
                 defaultVehicle: signupData.vehicleNumber.toUpperCase(),
                 vehicles: [signupData.vehicleNumber.toUpperCase()],
-                noShowCount: 0,
-                isBanned: false,
-                bannedUntil: null,
+                // Note: isBanned, bannedUntil, noShowCount are intentionally
+                // omitted — Firestore rules block customers from setting them.
+                // Admin sets these fields later if needed.
                 createdAt: new Date()
             };
 
