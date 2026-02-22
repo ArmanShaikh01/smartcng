@@ -1,5 +1,5 @@
 // Authentication context and hook
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getDocument, COLLECTIONS } from '../firebase/firestore';
@@ -18,10 +18,19 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
+    // loading = true means "auth + Firestore profile fetch is still in progress"
+    // We only set it to false AFTER the full profile resolution is done.
     const [loading, setLoading] = useState(true);
+    // profileResolved tracks whether we completed the Firestore lookup for the
+    // currently signed-in user. Login.jsx checks this to avoid the race condition
+    // where user is set but role is still null (Firestore not fetched yet).
+    const [profileResolved, setProfileResolved] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            // Mark profile as not yet resolved whenever auth state changes
+            setProfileResolved(false);
+
             if (firebaseUser) {
                 setUser(firebaseUser);
 
@@ -56,10 +65,10 @@ export const AuthProvider = ({ children }) => {
                                 const newDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
                                 await setDoc(newDocRef, { ...privilegedProfile, userId: firebaseUser.uid, phoneNumber: firebaseUser.phoneNumber });
                                 await deleteDoc(privilegedDoc.ref); // delete old phone-keyed doc
-                                // Also delete the stale customer UID doc (we just overwrote it with setDoc)
 
                                 setUserProfile({ ...privilegedProfile, userId: firebaseUser.uid });
                                 setUserRole(privilegedProfile.role);
+                                setProfileResolved(true);
                                 setLoading(false);
                                 return;
                             }
@@ -103,12 +112,16 @@ export const AuthProvider = ({ children }) => {
                     }
                 } catch (error) {
                     console.error('Error fetching user profile:', error);
+                    setUserProfile(null);
+                    setUserRole(null);
                 }
             } else {
                 setUser(null);
                 setUserRole(null);
                 setUserProfile(null);
             }
+            // Always mark profile as resolved and loading as done here
+            setProfileResolved(true);
             setLoading(false);
         });
 
@@ -121,9 +134,10 @@ export const AuthProvider = ({ children }) => {
         userRole,
         userProfile,
         loading,
+        profileResolved,
         setUserProfile,
         setUserRole
-    }), [user, userRole, userProfile, loading]);
+    }), [user, userRole, userProfile, loading, profileResolved]);
 
     return (
         <AuthContext.Provider value={value}>

@@ -51,10 +51,29 @@ export const initRecaptcha = () => {
     window.recaptchaVerifier = new RecaptchaVerifier(getAuth(), RCAP_ID, {
         size: 'invisible',
         callback: () => { /* reCAPTCHA solved — signInWithPhoneNumber continues */ },
-        'expired-callback': () => { window.recaptchaVerifier = null; }
+        'expired-callback': () => {
+            window.recaptchaVerifier = null;
+            window._rcapRendered = false;
+        }
     });
 
     return window.recaptchaVerifier;
+};
+
+/**
+ * Pre-render reCAPTCHA while user types phone number so OTP is faster.
+ * Safe to call multiple times — only renders once.
+ */
+export const warmupRecaptcha = async () => {
+    try {
+        if (window._rcapRendered) return;          // already warmed up
+        if (!window.recaptchaVerifier) initRecaptcha();
+        await window.recaptchaVerifier.render();   // contact Google servers early
+        window._rcapRendered = true;
+    } catch (_) {
+        // warmup failure is non-fatal — sendOTP will retry
+        window._rcapRendered = false;
+    }
 };
 
 /**
@@ -64,14 +83,23 @@ export const initRecaptcha = () => {
  */
 export const sendOTP = async (phoneNumber) => {
     try {
-        const appVerifier = initRecaptcha();
-        // Do NOT call appVerifier.render() manually —
-        // signInWithPhoneNumber triggers it internally.
+        // Always start with a fresh verifier for each OTP send.
+        // initRecaptcha() clears the old verifier + DOM node internally,
+        // so this is safe and avoids "used" reCAPTCHA token errors.
+        initRecaptcha();
+        window._rcapRendered = false;
+
+        const appVerifier = window.recaptchaVerifier;
         const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
         return confirmationResult;
     } catch (error) {
         console.error('Error sending OTP:', error);
-        window.recaptchaVerifier = null;
+        // Clean up so the next attempt gets a completely fresh start
+        if (window.recaptchaVerifier) {
+            try { window.recaptchaVerifier.clear(); } catch (_) { }
+            window.recaptchaVerifier = null;
+        }
+        window._rcapRendered = false;
         throw error;
     }
 };

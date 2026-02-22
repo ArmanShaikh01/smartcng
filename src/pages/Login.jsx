@@ -1,8 +1,8 @@
 // Login page with Phone OTP and Signup
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { sendOTP, verifyOTP } from '../firebase/auth';
-import { getDocument, COLLECTIONS } from '../firebase/firestore';
+import { sendOTP, verifyOTP, warmupRecaptcha } from '../firebase/auth';
+import { COLLECTIONS } from '../firebase/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../hooks/useAuth';
@@ -22,7 +22,7 @@ const Login = () => {
         vehicleNumber: ''
     });
 
-    const { user, userRole, loading, setUserProfile, setUserRole } = useAuth();
+    const { user, userRole, loading, profileResolved, setUserProfile, setUserRole } = useAuth();
     const navigate = useNavigate();
 
     // ── Role-aware redirect helper ──────────────────────────────
@@ -35,14 +35,25 @@ const Login = () => {
         }
     };
 
-    // Redirect if already logged in (once, after auth loads)
+    // After OTP verify, onAuthStateChanged fires in useAuth and updates user/userRole.
+    // This effect handles navigation once auth state is resolved.
     const didRedirect = useRef(false);
     useEffect(() => {
-        if (!loading && user && userRole && !didRedirect.current) {
-            didRedirect.current = true;
-            navigateByRole(userRole);
+        if (loading) return;                         // still fetching from Firestore
+        if (!user) return;                          // not signed in yet
+        if (!profileResolved) return;               // Firestore lookup still in progress
+
+        if (userRole) {
+            // Known user (customer / operator / owner / admin) → go to dashboard
+            if (!didRedirect.current) {
+                didRedirect.current = true;
+                navigateByRole(userRole);
+            }
+        } else if (step === 'otp') {
+            // Signed in, profile fully resolved, no doc found → brand-new user → show signup
+            setStep('signup');
         }
-    }, [loading, user, userRole]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [loading, user, userRole, profileResolved]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Cooldown timer countdown
     useEffect(() => {
@@ -101,64 +112,24 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            const userCredential = await verifyOTP(confirmationResult, otp);
-            const firebaseUser = userCredential.user;
-
-            // First, try to find user by phone number (for admin-created users)
-            const { collection, query, where, getDocs } = await import('firebase/firestore');
-            const { db } = await import('../firebase/config');
-
-            const usersRef = collection(db, COLLECTIONS.USERS);
-            const q = query(usersRef, where('phoneNumber', '==', firebaseUser.phoneNumber));
-            const querySnapshot = await getDocs(q);
-
-            let existingUserDoc = querySnapshot.empty ? null : querySnapshot.docs[0];
-
-            // Backward-compat: try matching last 10 digits
-            if (!existingUserDoc) {
-                const last10 = firebaseUser.phoneNumber.replace(/\D/g, '').slice(-10);
-                const allUsersSnap = await getDocs(usersRef);
-                const match = allUsersSnap.docs.find(d => {
-                    const savedPhone = (d.data().phoneNumber || '').replace(/\D/g, '');
-                    return savedPhone.endsWith(last10);
-                });
-                if (match) existingUserDoc = match;
-            }
-
-            if (existingUserDoc) {
-                const existingUser = existingUserDoc.data();
-                const { updateDoc } = await import('firebase/firestore');
-                await updateDoc(existingUserDoc.ref, {
-                    userId: firebaseUser.uid,
-                    phoneNumber: firebaseUser.phoneNumber
-                });
-                setUserProfile(existingUser);
-                setUserRole(existingUser.role);
-                setFormLoading(false);
-                navigateByRole(existingUser.role);
-            } else {
-                const userDoc = await getDocument(COLLECTIONS.USERS, firebaseUser.uid);
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    setUserProfile(userData);
-                    setUserRole(userData.role);
-                    setFormLoading(false);
-                    navigateByRole(userData.role);
-                } else {
-                    // New user — go to signup (user is already signed in via Firebase Auth)
-                    setFormLoading(false);
-                    setStep('signup');
-                }
-            }
+            // Verify OTP — Firebase Auth signs the user in.
+            // onAuthStateChanged in useAuth fires next, does all Firestore lookups
+            // (phone-based migration for admin-created users too), and sets userRole.
+            // The useEffect above then navigates by role — same path as admin login.
+            await verifyOTP(confirmationResult, otp);
+            setFormLoading(false);
+            // Navigation is handled by the useEffect watching [loading, user, userRole]
         } catch (err) {
             console.error('Error verifying OTP:', err);
-            // Give specific message for wrong code vs other errors
             if (err.code === 'auth/invalid-verification-code') {
                 setError('Wrong OTP. Please check the SMS and try again.');
             } else if (err.code === 'auth/code-expired') {
                 setError('OTP expired. Please request a new one.');
+            } else if (err.code === 'auth/session-expired') {
+                setError('Session expired. Please request a new OTP.');
             } else {
-                setError('Verification failed. Please try again.');
+                // Show the actual error for debugging
+                setError((err.message || 'Verification failed.') + ' (' + (err.code || 'unknown') + ')');
             }
             setFormLoading(false);
         }
@@ -303,7 +274,11 @@ const Login = () => {
                                         className="input"
                                         placeholder="9876543210"
                                         value={phoneNumber}
-                                        onChange={(e) => setPhoneNumber(e.target.value)}
+                                        onChange={(e) => {
+                                            setPhoneNumber(e.target.value);
+                                            // Warm up reCAPTCHA as soon as first digit is typed
+                                            if (e.target.value.length === 1) warmupRecaptcha();
+                                        }}
                                         required
                                         disabled={formLoading}
                                     />
@@ -335,7 +310,7 @@ const Login = () => {
                                     onChange={(e) => setOtp(e.target.value)}
                                     maxLength={6}
                                     required
-                                    disabled={loading}
+                                    disabled={formLoading}
                                     autoFocus
                                     style={{ letterSpacing: '0.3em', textAlign: 'center', fontSize: 'var(--text-xl)' }}
                                 />
