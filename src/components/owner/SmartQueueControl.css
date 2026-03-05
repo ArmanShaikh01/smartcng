@@ -1,0 +1,72 @@
+/* SmartQueueControl.css */
+.sqc-loading { display:flex; flex-direction:column; align-items:center; padding:24px; color:#9ca3af; gap:8px; }
+
+.sqc-container { margin-top: 16px; }
+
+.sqc-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #111827;
+    margin-bottom: 12px;
+}
+.sqc-count { font-size:0.8rem; color:#9ca3af; font-weight:400; }
+
+.sqc-empty { text-align:center; padding:28px; color:#9ca3af; }
+
+.sqc-list { display:flex; flex-direction:column; gap:10px; }
+
+.sqc-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 12px 14px;
+    transition: box-shadow 0.18s;
+    flex-wrap: wrap;
+}
+.sqc-row:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.07); }
+.sqc-row--emergency { border-color: #fca5a5; background: #fff8f8; }
+
+.sqc-pos {
+    display: flex; flex-direction:column; align-items:center;
+    font-size: 1.1rem; font-weight: 800; color: #0E7C5B;
+    min-width: 36px;
+}
+.sqc-emer-tag { font-size:0.65rem; }
+
+.sqc-info { flex:1; min-width:0; }
+.sqc-vehicle { font-size:0.95rem; font-weight:700; color:#111827; }
+
+.sqc-status {
+    display:inline-block; font-size:0.7rem; font-weight:600;
+    padding: 2px 8px; border-radius:99px; margin-top:3px;
+}
+.sqc-status--waiting    { background:#f3f4f6; color:#6b7280; }
+.sqc-status--eligible   { background:#fef3c7; color:#92400e; }
+.sqc-status--checked    { background:#dbeafe; color:#1d4ed8; }
+.sqc-status--fueling    { background:#d1fae5; color:#065f46; }
+
+.sqc-checkin-tag { font-size:0.68rem; color:#065f46; margin-left:4px; }
+
+.sqc-actions { display:flex; gap:6px; flex-wrap:wrap; }
+
+.sqc-btn {
+    padding: 6px 10px;
+    border: none; border-radius:8px;
+    font-size: 0.75rem; font-weight:600;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.12s;
+    white-space: nowrap;
+}
+.sqc-btn:hover:not(:disabled) { opacity:0.85; transform:translateY(-1px); }
+.sqc-btn:disabled { opacity:0.5; cursor:not-allowed; }
+
+.sqc-btn--complete  { background:#d1fae5; color:#065f46; }
+.sqc-btn--skip      { background:#fef3c7; color:#92400e; }
+.sqc-btn--noshow    { background:#fee2e2; color:#991b1b; }
+.sqc-btn--emergency { background:#991b1b; color:#fff; }

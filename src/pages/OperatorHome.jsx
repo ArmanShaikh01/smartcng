@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRealtimeStation } from '../hooks/useRealtimeStation';
 import { useRealtimeQueue } from '../hooks/useRealtimeQueue';
+import { useInactivityWarning } from '../hooks/useInactivityWarning';
 import Navbar from '../components/shared/Navbar';
 import ControlPanel from '../components/operator/ControlPanel';
 import AwarenessPanel from '../components/operator/AwarenessPanel';
@@ -15,6 +16,9 @@ const OperatorHome = () => {
 
     const { station, loading: stationLoading } = useRealtimeStation(stationId);
     const { queue, loading: queueLoading } = useRealtimeQueue(stationId);
+
+    // Inactivity warning: fires a notification if operator is idle while queue has vehicles
+    useInactivityWarning(user?.uid, stationId, queue.length);
 
     const [showFullQueue, setShowFullQueue] = useState(false);
 
@@ -31,18 +35,24 @@ const OperatorHome = () => {
 
     if (stationLoading || queueLoading) {
         return (
-            <div className="operator-loading">
-                <div className="spinner"></div>
-                <p>Loading operator dashboard...</p>
+            <div className="operator-home">
+                <Navbar />
+                <div className="operator-loading">
+                    <div className="spinner"></div>
+                    <p>Loading operator dashboard...</p>
+                </div>
             </div>
         );
     }
 
     if (!station) {
         return (
-            <div className="operator-error">
-                <h2>⚠️ Station Not Found</h2>
-                <p>You are not assigned to any station. Please contact admin.</p>
+            <div className="operator-home">
+                <Navbar />
+                <div className="operator-error">
+                    <h2>⚠️ Station Not Found</h2>
+                    <p>You are not assigned to any station. Please contact admin.</p>
+                </div>
             </div>
         );
     }

@@ -1,6 +1,7 @@
 // Station Controls Component - Owner controls for gas and booking
 import { useState } from 'react';
 import { toggleGasStatus, toggleBookingStatus } from '../../utils/operatorLogic';
+import { logAuditAction, AUDIT_ACTION } from '../../utils/auditLog';
 import Icon from '../shared/Icon';
 import './StationControls.css';
 
@@ -17,9 +18,17 @@ const StationControls = ({ station, ownerId }) => {
         setActionLoading('gas');
         setLoading(true);
 
-        const result = await toggleGasStatus(station.stationId, !station.gasOn, ownerId);
+        const newVal = !station.gasOn;
+        const result = await toggleGasStatus(station.stationId, newVal, ownerId);
 
-        if (!result.success) {
+        if (result.success) {
+            await logAuditAction({
+                userId: ownerId, role: 'owner',
+                stationId: station.stationId,
+                actionType: newVal ? AUDIT_ACTION.GAS_ON : AUDIT_ACTION.GAS_OFF,
+                description: `Gas turned ${newVal ? 'ON' : 'OFF'} at ${station.name}`
+            });
+        } else {
             alert('Failed to toggle gas status: ' + result.error);
         }
 
@@ -36,9 +45,17 @@ const StationControls = ({ station, ownerId }) => {
         setActionLoading('booking');
         setLoading(true);
 
-        const result = await toggleBookingStatus(station.stationId, !station.bookingOn, ownerId);
+        const newVal = !station.bookingOn;
+        const result = await toggleBookingStatus(station.stationId, newVal, ownerId);
 
-        if (!result.success) {
+        if (result.success) {
+            await logAuditAction({
+                userId: ownerId, role: 'owner',
+                stationId: station.stationId,
+                actionType: newVal ? AUDIT_ACTION.BOOKING_OPEN : AUDIT_ACTION.BOOKING_CLOSE,
+                description: `Booking ${newVal ? 'opened' : 'closed'} at ${station.name}`
+            });
+        } else {
             alert('Failed to toggle booking status: ' + result.error);
         }
 

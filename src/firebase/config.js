@@ -6,6 +6,7 @@ import {
   persistentLocalCache,
   persistentMultipleTabManager
 } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
@@ -33,6 +34,9 @@ export const db = initializeFirestore(app, {
     tabManager: persistentMultipleTabManager()
   })
 });
+
+// Initialize Firebase Storage
+export const storage = getStorage(app);
 
 // Initialize messaging only if supported (not in all browsers)
 let messaging = null;

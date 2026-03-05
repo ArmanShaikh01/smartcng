@@ -1,13 +1,20 @@
 // Owner Home - Main owner interface
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRealtimeStation } from '../hooks/useRealtimeStation';
 import { useRealtimeQueue } from '../hooks/useRealtimeQueue';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { COLLECTIONS } from '../firebase/firestore';
 import Navbar from '../components/shared/Navbar';
 import StationControls from '../components/owner/StationControls';
 import Analytics from '../components/owner/Analytics';
 import VisualQueue from '../components/shared/VisualQueue';
 import OperatorManagement from '../components/owner/OperatorManagement';
+import OwnerComplaintPanel from '../components/owner/OwnerComplaintPanel';
+import AuditLogPanel from '../components/owner/AuditLogPanel';
+import StationRatingDashboard from '../components/owner/StationRatingDashboard';
+import SmartQueueControl from '../components/owner/SmartQueueControl';
 import Icon from '../components/shared/Icon';
 import './OwnerHome.css';
 
@@ -15,9 +22,22 @@ const OwnerHome = () => {
     const { user, userProfile } = useAuth();
     const stationId = userProfile?.stationId;
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [pendingComplaints, setPending] = useState(0);
 
     const { station, loading: stationLoading } = useRealtimeStation(stationId);
     const { queue, loading: queueLoading } = useRealtimeQueue(stationId);
+
+    // Live count of pending complaints for badge
+    useEffect(() => {
+        if (!stationId) return;
+        const q = query(
+            collection(db, COLLECTIONS.COMPLAINTS),
+            where('stationId', '==', stationId),
+            where('status', '==', 'pending')
+        );
+        const unsub = onSnapshot(q, snap => setPending(snap.size));
+        return () => unsub();
+    }, [stationId]);
 
     if (stationLoading || queueLoading) {
         return (
@@ -54,6 +74,13 @@ const OwnerHome = () => {
         );
     }
 
+    const tabs = [
+        { key: 'dashboard',  label: 'Dashboard',      icon: 'barChart'   },
+        { key: 'operators',  label: 'Operators',       icon: 'users'      },
+        { key: 'complaints', label: 'Complaints',      icon: 'alertTriangle' },
+        { key: 'logs',       label: 'Activity Logs',   icon: 'history'    },
+    ];
+
     return (
         <div className="owner-home">
             <Navbar title={`Owner - ${station.name}`} />
@@ -67,34 +94,38 @@ const OwnerHome = () => {
                     </div>
                 </div>
 
+                {/* ── Tabs ── */}
                 <div className="owner-tabs">
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveTab('dashboard');
-                        }}
-                        className={`tab-btn ${activeTab === 'dashboard' ? 'active' : ''}`}
-                    >
-                        <Icon name="barChart" size={16} /> Dashboard
-                    </button>
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveTab('operators');
-                        }}
-                        className={`tab-btn ${activeTab === 'operators' ? 'active' : ''}`}
-                    >
-                        <Icon name="users" size={16} /> Operators
-                    </button>
+                    {tabs.map(tab => (
+                        <button
+                            key={tab.key}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setActiveTab(tab.key); }}
+                            className={`tab-btn ${activeTab === tab.key ? 'active' : ''}`}
+                            style={{ position: 'relative' }}
+                        >
+                            {tab.icon && <Icon name={tab.icon} size={16} />} {tab.label}
+                            {/* Complaint badge */}
+                            {tab.key === 'complaints' && pendingComplaints > 0 && (
+                                <span style={{
+                                    position: 'absolute', top: -6, right: -6,
+                                    background: '#ef4444', color: '#fff',
+                                    fontSize: '0.65rem', fontWeight: 700,
+                                    borderRadius: '99px', padding: '2px 6px', lineHeight: 1
+                                }}>{pendingComplaints}</span>
+                            )}
+                        </button>
+                    ))}
                 </div>
 
-                {activeTab === 'dashboard' ? (
+                {/* ── Tab Content ── */}
+                {activeTab === 'dashboard' && (
                     <div className="dashboard-grid">
                         <div className="dashboard-main">
                             <StationControls station={station} ownerId={user.uid} />
                             <Analytics stationId={stationId} />
+                            {/* Smart Queue Control Panel */}
+                            <SmartQueueControl stationId={stationId} ownerId={user.uid} />
                         </div>
 
                         <div className="dashboard-sidebar">
@@ -127,8 +158,23 @@ const OwnerHome = () => {
                             />
                         </div>
                     </div>
-                ) : (
+                )}
+
+                {activeTab === 'operators' && (
                     <OperatorManagement stationId={stationId} />
+                )}
+
+                {activeTab === 'complaints' && (
+                    <div>
+                        {/* Rating Dashboard at top */}
+                        <StationRatingDashboard stationId={stationId} />
+                        {/* Complaint List below */}
+                        <OwnerComplaintPanel stationId={stationId} />
+                    </div>
+                )}
+
+                {activeTab === 'logs' && (
+                    <AuditLogPanel stationId={stationId} />
                 )}
             </div>
         </div>

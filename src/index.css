@@ -21,24 +21,35 @@ html {
   scroll-behavior: smooth;
 }
 
-html,
+/* html — no overflow restriction so window scroll works freely */
+html {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  min-height: 100dvh;                /* Accounts for mobile browser chrome */
+  min-height: 100dvh;
+  /* Only block horizontal scroll — NOT vertical */
   overflow-x: hidden;
+  overflow-y: auto;                  /* ← allow window-level vertical scroll */
   max-width: 100vw;
   font-family: var(--font-sans);
   background-color: var(--color-neutral-50);
   color: var(--color-neutral-900);
   line-height: var(--leading-normal);
 
-  /* PWA: disable pull-to-refresh & bounce scrolling */
-  overscroll-behavior: none;
+  /* PWA: block horizontal bounce only — keep vertical scroll smooth */
+  overscroll-behavior-x: none;
 
-  /* PWA: disable double-tap zoom on mobile */
-  touch-action: manipulation;
+  /* FIXED: 'manipulation' was blocking single-finger scroll on mobile,
+     touchpad pan gestures, and mouse wheel in some browsers.
+     'pan-x pan-y' allows all panning but still blocks double-tap zoom. */
+  touch-action: pan-x pan-y;
 
   /* PWA: remove tap highlight flash on Android */
   -webkit-tap-highlight-color: transparent;

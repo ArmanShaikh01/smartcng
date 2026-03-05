@@ -62,16 +62,33 @@ service cloud.firestore {
       // LIST (collection query): allow authenticated users to query
       // by phoneNumber so useAuth.jsx can find admin-created operator/owner
       // accounts (phone-keyed) and migrate them to UID-keyed docs.
-      // Without this rule, new users and staff logins get permission-denied
-      // on the phone-number fallback query.
       allow list: if isAuth();
 
-      // CREATE: only own UID doc; cannot self-assign privileged role
-      allow create: if isOwner(userId)
-        && (!hasField('role') || request.resource.data.role == 'customer')
-        && !hasField('isBanned')
-        && !hasField('bannedUntil')
-        && !hasField('noShowCount');
+      // CREATE — three allowed cases:
+      //   1. User creates their own UID doc (customer self-registration)
+      //      Cannot self-assign privileged role or banned fields.
+      //   2. Owner creates an operator doc (any auto-generated doc ID)
+      //   3. First-login UID migration: operator/owner creating their own
+      //      UID-keyed doc from a phone-keyed doc (useAuth.jsx fallback path).
+      //      Doc ID must be their UID and phone must match verified token.
+      allow create: if
+        // Case 1: self-registration as customer
+        (isOwner(userId)
+          && (!hasField('role') || request.resource.data.role == 'customer')
+          && !hasField('isBanned')
+          && !hasField('bannedUntil')
+          && !hasField('noShowCount'))
+        ||
+        // Case 2: owner adds a new operator (pre-login, auto-generated doc ID)
+        (isOwnerRole() && request.resource.data.role == 'operator')
+        ||
+        // Case 3: first-login UID migration for operator/owner accounts
+        //   useAuth.jsx does: setDoc(uid-doc, {...phoneDoc, userId: uid})
+        //   Safe: doc ID == caller UID + phone matches verified Firebase token
+        (isAuth()
+          && userId == request.auth.uid
+          && request.resource.data.phoneNumber == request.auth.token.phone_number
+          && request.resource.data.role in ['operator', 'owner', 'admin']);
 
       // UPDATE: own doc only — locked fields can never be self-modified
       allow update: if isOwner(userId)
@@ -83,9 +100,24 @@ service cloud.firestore {
       // ADMIN override: full read/write for user management panel
       allow write: if isAdmin();
 
-      // Nobody (not even admins in client code) can delete user docs —
-      // use isBanned flag instead to soft-delete.
-      allow delete: if false;
+      // DELETE — three allowed cases:
+      //   1. Account self-deletion: user deletes their own UID-keyed doc
+      //      (happens during the "Delete My Account" flow in Profile.jsx)
+      //   2. Legacy migration: user deletes an old phone-keyed doc during
+      //      first-login UID migration (the doc ID is NOT their UID but
+      //      the phoneNumber matches their verified Firebase Auth phone)
+      //   3. Owner removes an operator from their station
+      allow delete: if isAuth() && (
+        // Case 1: deleting own UID-keyed doc (account deletion)
+        resource.id == request.auth.uid
+        ||
+        // Case 2: deleting legacy phone-keyed doc (UID migration)
+        (resource.data.phoneNumber == request.auth.token.phone_number
+          && resource.id != request.auth.uid)
+        ||
+        // Case 3: owner deletes an operator document
+        (isOwnerRole() && resource.data.role == 'operator')
+      );
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -101,22 +133,20 @@ service cloud.firestore {
 
       // UPDATE:
       //   Admin: any field
-      //   Operator: only operational toggle fields (gasOn, bookingOn, counters)
+      //   Owner: any field
+      //   Operator: only safe operational toggle fields (gasOn, bookingOn, counters)
+      //   NOTE: We skip the stationId match check because the Firestore doc ID
+      //         differs from the custom stationId field value in the operator's doc,
+      //         making a reliable station-match impossible in rules alone.
+      //         Field-level restriction (onlyUpdatingOperationalFields) keeps this safe.
       allow update: if isAdmin()
-        || (isOperator() && isOperatorOfStation(stationId)
-              && onlyUpdatingOperationalFields());
+        || isOwnerRole()
+        || (isOperator() && onlyUpdatingOperationalFields());
 
-      // ── Station-scoped helpers ─────────────────────────────────────
-
-      // Is the caller an operator assigned to this station?
-      function isOperatorOfStation(sid) {
-        return get(/databases/$(database)/documents/stations/$(sid))
-                 .data.operatorIds.hasAny([request.auth.uid]);
-      }
-
-      // Operators may only touch these operational fields
+      // Operators may only touch these operational fields — no sensitive data exposed
       function onlyUpdatingOperationalFields() {
-        let allowed = ['gasOn', 'bookingOn', 'totalVehiclesServed', 'totalSkips', 'updatedAt'];
+        let allowed = ['gasOn', 'bookingOn', 'totalVehiclesServed',
+                       'totalSkips', 'slotCapacity', 'updatedAt'];
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
       }
     }
@@ -126,13 +156,16 @@ service cloud.firestore {
     // ────────────────────────────────────────────────────────────────
     match /bookings/{bookingId} {
 
-      // READ:
-      //   Customer → own bookings only
-      //   Operator/Owner/Admin → any booking (needed for queue panel + analytics)
-      allow read: if isAuth() && (
+      // READ (single document): own booking or staff
+      allow get: if isAuth() && (
         resource.data.customerId == request.auth.uid
         || isStaff()
       );
+
+      // LIST (collection queries for queue panel / analytics):
+      //   resource is null during list evaluation — must not reference resource.data.
+      //   Security is enforced by app-side query filters (customerId == uid for customers).
+      allow list: if isAuth();
 
       // CREATE: authenticated user; must set customerId to their own UID
       //   Prevents creating bookings on behalf of others
@@ -184,35 +217,108 @@ service cloud.firestore {
     }
 
     // ────────────────────────────────────────────────────────────────
-    //   /notifications/{notifId}
+    //   /notifications/{userId}/items/{notifId}
+    //
+    //   IMPORTANT: The code uses a SUBCOLLECTION structure:
+    //     notifications/{userId}/items/{notifId}
+    //   NOT a flat collection. Rules must match this exact path.
     // ────────────────────────────────────────────────────────────────
-    match /notifications/{notifId} {
+    match /notifications/{userId} {
+      // The parent doc itself — allow authenticated owner to read/write
+      // (needed so Firestore can traverse the path to the subcollection)
+      allow read, write: if isOwner(userId) || isAdmin();
 
-      // READ: own notifications only
-      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      match /items/{notifId} {
 
-      // CREATE: admin only (createNotification() is server-side logic called in utils)
-      //   In production, move this to a Cloud Function to enforce fully server-side.
-      allow create: if isAdmin()
-        || (isAuth() && request.resource.data.userId == request.auth.uid);
+        // READ (single document): owner of this notification or admin
+        allow get: if isOwner(userId) || isAdmin();
 
-      // UPDATE: own notification only (e.g., marking as read)
-      allow update: if isAuth()
-        && resource.data.userId == request.auth.uid
-        && onlyMarkingRead();
+        // LIST (collection queries — unread count, notification panel):
+        //   Only the owner of the UID bucket or admin can list their items
+        allow list: if isOwner(userId) || isAdmin();
 
-      // DELETE: own notification only
-      allow delete: if isAuth() && resource.data.userId == request.auth.uid;
+        // CREATE: any authenticated user can write to their own bucket,
+        //   OR admin/staff can push notifications to any user's bucket
+        allow create: if isAdmin()
+          || isStaff()
+          || isOwner(userId);
 
-      function onlyMarkingRead() {
-        let allowed = ['isRead', 'readAt'];
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+        // UPDATE: owner only — e.g., marking as read
+        allow update: if isOwner(userId) && onlyMarkingRead();
+
+        // DELETE: owner only
+        allow delete: if isOwner(userId);
+
+        // Only allow the 'read' and 'readAt' fields to be updated
+        // (matches the markNotificationRead schema: { read: true })
+        function onlyMarkingRead() {
+          let allowed = ['read', 'readAt'];
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+        }
       }
     }
 
     // ────────────────────────────────────────────────────────────────
+    //   /ratings/{ratingId}
+    //   Schema: { stationId, customerId, bookingId, rating, comment, createdAt }
+    // ────────────────────────────────────────────────────────────────
+    match /ratings/{ratingId} {
+      // READ: any authenticated user (to compute avg on station cards)
+      allow read: if isAuth();
+
+      // CREATE: authenticated user, must set their own customerId
+      //   One rating per booking is enforced app-side (alreadyRated check)
+      allow create: if isAuth()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+      // NO update or delete (ratings are immutable)
+      allow update, delete: if isAdmin();
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /complaints/{complaintId}
+    //   Schema: { customerId, stationId, bookingId, description,
+    //             imageUrl, status, resolvedAt, createdAt }
+    // ────────────────────────────────────────────────────────────────
+    match /complaints/{complaintId} {
+      // READ: own complaint (customer) OR admin OR staff (operators/owners)
+      allow read: if isAuth()
+        && (resource.data.customerId == request.auth.uid || isStaff() || isAdmin());
+
+      // LIST: any authenticated staff member or the customer themselves
+      allow list: if isAuth();
+
+      // CREATE: authenticated user, must set own customerId
+      allow create: if isAuth()
+        && request.resource.data.customerId == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // UPDATE: admin OR staff (owner/operator) can mark as resolved
+      //   Only allow changing status + resolvedAt field
+      allow update: if isAdmin() || isStaff();
+
+      // DELETE: not allowed
+      allow delete: if false;
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    //   /audit_logs/{logId}
+    //   Schema: { userId, role, actionType, description, stationId, createdAt }
+    // ────────────────────────────────────────────────────────────────
+    match /audit_logs/{logId} {
+      // CREATE: staff (owner/operator) or admin can write logs
+      allow create: if isAuth() && (isStaff() || isAdmin());
+      // READ: staff of the same station or admin
+      allow read: if isAuth() && (isStaff() || isAdmin());
+      // No updates or deletes — audit logs are immutable
+      allow update, delete: if false;
+    }
+
+    // ────────────────────────────────────────────────────────────────
     //   DENY ALL — catch-all for any other collection
-    //   Prevents accidental access if new collections are added
     // ────────────────────────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;

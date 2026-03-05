@@ -79,6 +79,24 @@ const UserManagement = () => {
         }
     };
 
+    const handleBlock = async (user) => {
+        const isBlocked = user.isBanned === true;
+        const action = isBlocked ? 'unblock' : 'block';
+        if (!confirm(`Are you sure you want to ${action} "${user.name || user.phoneNumber}"?`)) return;
+
+        try {
+            await updateDoc(doc(db, COLLECTIONS.USERS, user.id), {
+                isBanned: !isBlocked,
+                bannedUntil: null,
+                updatedAt: new Date()
+            });
+            // onSnapshot listener will auto-refresh the list
+        } catch (error) {
+            console.error(`Error trying to ${action} user:`, error);
+            alert(`Failed to ${action} user: ` + error.message);
+        }
+    };
+
     const handleDelete = async (userId) => {
         if (!confirm('Are you sure you want to delete this user?')) return;
 
@@ -205,26 +223,40 @@ const UserManagement = () => {
                             </thead>
                             <tbody>
                                 {users.map(user => (
-                                    <tr key={user.id}>
-                                        <td>{user.name}</td>
-                                        <td>{user.phoneNumber}</td>
-                                        <td>
+                                    <tr
+                                        key={user.id}
+                                        className={user.isBanned ? 'um-row-blocked' : ''}
+                                    >
+                                        <td data-label="Name">
+                                            {user.name}
+                                            {user.isBanned && (
+                                                <span className="um-banned-badge">Blocked</span>
+                                            )}
+                                        </td>
+                                        <td data-label="Phone">{user.phoneNumber}</td>
+                                        <td data-label="Role">
                                             <span className={`role-badge ${getRoleBadgeClass(user.role)}`}>
                                                 {user.role}
                                             </span>
                                         </td>
-                                        <td>{user.stationId || 'N/A'}</td>
-                                        <td>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDelete(user.id);
-                                                }}
-                                                className="btn-delete"
-                                            >
-                                                Delete
-                                            </button>
+                                        <td data-label="Station">{user.stationId || 'N/A'}</td>
+                                        <td data-label="Action">
+                                            <div className="um-action-btns">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleBlock(user); }}
+                                                    className={user.isBanned ? 'btn-unblock' : 'btn-block'}
+                                                >
+                                                    {user.isBanned ? 'Unblock' : 'Block'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(user.id); }}
+                                                    className="btn-delete"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

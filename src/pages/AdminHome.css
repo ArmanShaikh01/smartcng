@@ -7,6 +7,8 @@
     background: var(--color-neutral-50);
     display: flex;
     flex-direction: column;
+    /* overflow-x only — let body handle all vertical scrolling */
+    overflow-x: hidden;
 }
 
 /* ══ TOP NAVBAR ══ */
@@ -252,6 +254,8 @@
 /* ══ MAIN CONTENT ══ */
 .admin-main {
     flex: 1;
+    /* Do NOT set overflow-y: auto here — that would create a nested
+       scroll container and trap mouse-wheel events away from the window */
 }
 
 .admin-content {
@@ -634,4 +638,107 @@
     from { opacity: 0; }
     to   { opacity: 1; }
 }
+
+/* ============================================
+   ADMIN — MOBILE BOTTOM NAVIGATION BAR
+   ============================================ */
+
+.admin-bottom-nav { display: none; }
+
+@media (max-width: 1024px) {
+    .admin-bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 62px;
+        background: var(--color-neutral-0);
+        border-top: 1px solid var(--color-neutral-100);
+        box-shadow: 0 -2px 12px rgba(0,0,0,0.08);
+        z-index: var(--z-sticky, 100);
+        align-items: stretch;
+        justify-content: space-around;
+        padding: 0 4px;
+    }
+
+    /* Hide hamburger + drawer — bottom nav handles navigation */
+    .admin-hamburger,
+    .admin-drawer,
+    .admin-drawer-overlay {
+        display: none !important;
+    }
+
+    /* Hide desktop nav tabs on mobile — bottom nav replaces them */
+    .admin-nav-tabs {
+        display: none;
+    }
+
+    .admin-bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        flex: 1;
+        padding: 6px 4px 8px;
+        border: none;
+        background: transparent;
+        color: var(--color-neutral-400);
+        cursor: pointer;
+        transition: color var(--duration-fast, 0.15s) ease;
+        position: relative;
+        min-width: 0;
+    }
+
+    .admin-bottom-nav-item:active {
+        background: var(--color-primary-50);
+    }
+
+    .admin-bottom-nav-item.active {
+        color: var(--color-primary-600);
+    }
+
+    .admin-bottom-nav-item.active::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 20%;
+        right: 20%;
+        height: 2.5px;
+        background: var(--color-primary-600);
+        border-radius: 0 0 4px 4px;
+    }
+
+    .admin-bottom-nav-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+    }
+
+    .admin-bottom-nav-label {
+        font-size: 9.5px;
+        font-weight: 600;
+        font-family: var(--font-heading);
+        line-height: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    /* Ensure admin main content doesn't hide behind bottom nav */
+    .admin-main {
+        padding-bottom: 62px;
+    }
+}
+
+@media (max-width: 480px) {
+    .admin-bottom-nav { height: 58px; }
+    .admin-bottom-nav-label { font-size: 9px; }
+    .admin-main { padding-bottom: 58px; }
+}
+
 

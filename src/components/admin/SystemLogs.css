@@ -5,7 +5,8 @@
     border-radius: var(--radius-base);
     border: 1px solid var(--color-neutral-100);
     box-shadow: var(--shadow-sm);
-    overflow: hidden;
+    /* overflow: hidden removed — was blocking vertical scroll of table content */
+    overflow: visible;
 }
 
 /* ── Logs Header ── */
@@ -209,10 +210,66 @@
         align-items: flex-start;
         padding: var(--space-3) var(--space-4);
     }
-
     .logs-filters { width: 100%; }
     .filter-btn { flex: 1; min-width: 60px; text-align: center; }
 
     .logs-table th,
     .logs-table td { padding: var(--space-2) var(--space-3); }
+}
+
+@media (max-width: 480px) {
+    /* Convert logs table to card stack */
+    .logs-table-container { overflow-x: unset; }
+
+    .logs-table,
+    .logs-table thead,
+    .logs-table tbody,
+    .logs-table th,
+    .logs-table td,
+    .logs-table tr { display: block; }
+
+    .logs-table thead { display: none; }
+
+    .logs-table tbody tr {
+        background: var(--color-neutral-0);
+        border: 1px solid var(--color-neutral-100);
+        border-radius: var(--radius-base);
+        margin-bottom: var(--space-3);
+        padding: var(--space-3);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .logs-table tbody tr:hover { background: var(--color-neutral-50); }
+
+    .logs-table td {
+        border-bottom: 1px solid var(--color-neutral-50);
+        padding: var(--space-2) 0;
+        display: flex;
+        align-items: flex-start;
+        gap: var(--space-3);
+        font-size: var(--text-sm);
+        min-width: 0;
+        word-break: break-word;
+    }
+
+    .logs-table td:last-child { border-bottom: none; }
+
+    .logs-table td::before {
+        content: attr(data-label);
+        font-size: var(--text-xs);
+        font-weight: var(--font-bold);
+        font-family: var(--font-heading);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-neutral-400);
+        min-width: 56px;
+        flex-shrink: 0;
+        padding-top: 1px;
+    }
+
+    /* logs-header filters become 2-col grid */
+    .logs-filters {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
 }

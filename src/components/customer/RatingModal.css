@@ -1,0 +1,137 @@
+/* RatingModal.css */
+
+.rating-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 16px;
+    animation: rm-fade-in 0.2s ease;
+}
+
+@keyframes rm-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.rating-modal {
+    background: #fff;
+    border-radius: 20px;
+    padding: 28px 24px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    animation: rm-slide-up 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    text-align: center;
+}
+
+@keyframes rm-slide-up {
+    from { transform: translateY(30px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+.rating-modal h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 4px;
+}
+
+.rating-modal .rm-sub {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 20px;
+}
+
+/* Star row */
+.rm-stars {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.rm-star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 2rem;
+    line-height: 1;
+    transition: transform 0.15s, filter 0.15s;
+    padding: 0;
+    filter: grayscale(0.7);
+}
+
+.rm-star.active,
+.rm-star:hover {
+    filter: grayscale(0);
+    transform: scale(1.2);
+}
+
+/* Comment textarea */
+.rm-textarea {
+    width: 100%;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    font-family: inherit;
+    color: #111827;
+}
+
+.rm-textarea:focus { border-color: #0E7C5B; }
+
+/* Buttons */
+.rm-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.rm-btn-primary {
+    flex: 1;
+    padding: 12px 0;
+    background: linear-gradient(135deg, #0E7C5B, #0a6049);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.rm-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.rm-btn-primary:hover:not(:disabled) { opacity: 0.88; }
+
+.rm-btn-skip {
+    padding: 12px 16px;
+    background: #f3f4f6;
+    color: #6b7280;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.rm-btn-skip:hover { background: #e5e7eb; }
+
+.rm-success {
+    padding: 16px 0 4px;
+    font-size: 1.5rem;
+}
+
+.rm-success p {
+    color: #0E7C5B;
+    font-weight: 600;
+    margin-top: 8px;
+    font-size: 1rem;
+}

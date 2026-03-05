@@ -173,6 +173,24 @@ const AdminHome = () => {
                     </div>
                 </div>
             </main>
+
+            {/* ══ MOBILE BOTTOM NAV BAR ══ */}
+            <nav className="admin-bottom-nav" aria-label="Admin bottom navigation">
+                {NAV.map(item => (
+                    <button
+                        key={item.id}
+                        type="button"
+                        className={`admin-bottom-nav-item ${activeTab === item.id ? 'active' : ''}`}
+                        onClick={() => handleTabChange(item.id)}
+                        aria-label={item.label}
+                    >
+                        <span className="admin-bottom-nav-icon">
+                            <Icon name={item.iconName} size={22} />
+                        </span>
+                        <span className="admin-bottom-nav-label">{item.label}</span>
+                    </button>
+                ))}
+            </nav>
         </div>
     );
 };

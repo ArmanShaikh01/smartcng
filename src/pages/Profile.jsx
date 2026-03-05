@@ -5,12 +5,10 @@ import {
     doc, updateDoc, deleteDoc, collection,
     query, where, getDocs, writeBatch, addDoc, serverTimestamp
 } from 'firebase/firestore';
-import {
-    reauthenticateWithPhoneNumber, RecaptchaVerifier,
-    deleteUser, signOut
-} from 'firebase/auth';
+import { deleteUser, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
+import { sendOTP, verifyOTP } from '../firebase/auth';
 import { useAuth } from '../hooks/useAuth';
 import Navbar from '../components/shared/Navbar';
 import Icon from '../components/shared/Icon';
@@ -33,7 +31,7 @@ const Profile = () => {
 
     // Account deletion state
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-    const [deleteStep, setDeleteStep] = useState('confirm'); // confirm | otp | deleting | done
+    const [deleteStep, setDeleteStep] = useState('confirm'); // confirm | sending | otp | deleting | done
     const [deleteError, setDeleteError] = useState('');
     const [otpCode, setOtpCode] = useState('');
     const [confirmResult, setConfirmResult] = useState(null);
@@ -95,33 +93,37 @@ const Profile = () => {
     };
 
     /* ── Account Deletion ── */
+
+    // Step 1: Send OTP to the user's registered phone for re-auth
     const handleRequestDelete = async () => {
         setDeleteError('');
-        setDeleteStep('otp');
+        setDeleteStep('sending');   // show a spinner while OTP is being sent
 
         try {
-            // Set up invisible reCAPTCHA for re-auth
-            if (window._deleteRecaptcha) {
-                try { window._deleteRecaptcha.clear(); } catch (_) { }
+            // Use the same sendOTP helper as login — handles fresh reCAPTCHA automatically
+            // user.phoneNumber is the Firebase Auth verified phone (e.g. "+919876543210")
+            const phone = user.phoneNumber || userProfile?.phoneNumber;
+            if (!phone) {
+                setDeleteError('Phone number not found. Please contact support.');
+                setDeleteStep('confirm');
+                return;
             }
-            window._deleteRecaptcha = new RecaptchaVerifier(auth, 'delete-recaptcha', {
-                size: 'invisible',
-            });
-            await window._deleteRecaptcha.render();
 
-            const result = await reauthenticateWithPhoneNumber(
-                auth.currentUser,
-                userProfile?.phoneNumber,
-                window._deleteRecaptcha
-            );
+            const result = await sendOTP(phone);
             setConfirmResult(result);
+            setDeleteStep('otp');   // OTP sent — show input
         } catch (err) {
-            console.error('Re-auth error:', err);
-            setDeleteError('Failed to send OTP. Please try again.');
+            console.error('Re-auth OTP error:', err);
+            setDeleteError(
+                err.code === 'auth/too-many-requests'
+                    ? 'Too many attempts. Please wait a few minutes and try again.'
+                    : 'Failed to send OTP. Please try again.'
+            );
             setDeleteStep('confirm');
         }
     };
 
+    // Step 2: Verify OTP → wipe all user data → delete Auth account
     const handleConfirmDelete = async () => {
         if (!otpCode || otpCode.length < 6) {
             setDeleteError('Enter the 6-digit OTP sent to your phone.');
@@ -131,13 +133,13 @@ const Profile = () => {
         setDeleteError('');
 
         try {
-            // 1. Re-authenticate with OTP
-            await confirmResult.confirm(otpCode);
+            // 1. Verify OTP (re-authenticates the Firebase Auth session)
+            await verifyOTP(confirmResult, otpCode);
 
             const uid = user.uid;
             const batch = writeBatch(db);
 
-            // 2. Cancel active bookings
+            // 2. Cancel all active bookings
             const activeBookingsSnap = await getDocs(
                 query(
                     collection(db, COLLECTIONS.BOOKINGS),
@@ -146,40 +148,62 @@ const Profile = () => {
                 )
             );
             activeBookingsSnap.forEach(bookingDoc => {
-                batch.update(bookingDoc.ref, { status: 'cancelled', updatedAt: serverTimestamp() });
+                batch.update(bookingDoc.ref, {
+                    status: 'cancelled',
+                    updatedAt: serverTimestamp()
+                });
             });
 
-            // 3. Delete user Firestore document
+            // 3. Delete all notifications for this user (subcollection)
+            try {
+                const notifSnap = await getDocs(
+                    collection(db, 'notifications', uid, 'items')
+                );
+                notifSnap.forEach(n => batch.delete(n.ref));
+            } catch (_) {
+                // Notifications are non-critical — continue even if cleanup fails
+            }
+
+            // 4. Delete user Firestore document
             batch.delete(doc(db, COLLECTIONS.USERS, uid));
 
+            // Commit all Firestore changes atomically
             await batch.commit();
 
-            // 4. Log deletion event for admin audit
-            await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
-                action: 'account_deleted',
-                performedBy: uid,
-                performedByRole: role,
-                timestamp: serverTimestamp(),
-                metadata: {
-                    phone: userProfile?.phoneNumber,
-                    name: userProfile?.name,
-                    cancelledBookings: activeBookingsSnap.size,
-                }
-            });
+            // 5. Write audit log (best-effort — don't block deletion if this fails)
+            try {
+                await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
+                    action: 'account_deleted',
+                    performedBy: uid,
+                    performedByRole: role,
+                    timestamp: serverTimestamp(),
+                    metadata: {
+                        phone: user.phoneNumber || userProfile?.phoneNumber,
+                        name: userProfile?.name,
+                        cancelledBookings: activeBookingsSnap.size,
+                    }
+                });
+            } catch (_) { /* audit log failure must never block account deletion */ }
 
-            // 5. Delete Firebase Auth account
+            // 6. Delete Firebase Auth account (must be after Firestore writes
+            //    because the user doc read in rules requires auth.uid to exist)
             await deleteUser(auth.currentUser);
 
-            // 6. Sign out & redirect to login
-            await signOut(auth);
+            // 7. Sign out any residual session and redirect
+            try { await signOut(auth); } catch (_) { }
             navigate('/');
+
         } catch (err) {
             console.error('Delete account error:', err);
+            let msg = 'Deletion failed. Please try again or contact support@smartcng.in';
             if (err.code === 'auth/invalid-verification-code') {
-                setDeleteError('Invalid OTP. Please check and try again.');
-            } else {
-                setDeleteError('Deletion failed. Please try again or email support@smartcng.in');
+                msg = 'Invalid OTP. Please check and try again.';
+            } else if (err.code === 'auth/code-expired') {
+                msg = 'OTP expired. Please go back and request a new one.';
+            } else if (err.code === 'auth/requires-recent-login') {
+                msg = 'Session expired. Please log out and log in again, then retry.';
             }
+            setDeleteError(msg);
             setDeleteStep('otp');
         }
     };
@@ -447,7 +471,7 @@ const Profile = () => {
                                 <>
                                     <p className="delete-warning">
                                         ⚠️ This is <strong>permanent and irreversible</strong>. Your account,
-                                        vehicles, and all active bookings will be deleted.
+                                        vehicles, bookings, and notifications will be permanently deleted.
                                     </p>
                                     <div className="delete-actions">
                                         <button
@@ -468,10 +492,15 @@ const Profile = () => {
                                 </>
                             )}
 
+                            {/* Sending OTP spinner */}
+                            {deleteStep === 'sending' && (
+                                <p className="delete-warning">📲 Sending OTP to your phone… please wait.</p>
+                            )}
+
                             {deleteStep === 'otp' && (
                                 <>
                                     <p className="delete-warning">
-                                        Enter the 6-digit OTP sent to <strong>{userProfile?.phoneNumber}</strong>:
+                                        Enter the 6-digit OTP sent to <strong>{user?.phoneNumber || userProfile?.phoneNumber}</strong>:
                                     </p>
                                     <div className="otp-row">
                                         <input
@@ -482,11 +511,13 @@ const Profile = () => {
                                             value={otpCode}
                                             onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
                                             className="profile-input otp-input"
+                                            autoFocus
                                         />
                                         <button
                                             type="button"
                                             className="delete-proceed-btn"
                                             onClick={handleConfirmDelete}
+                                            disabled={otpCode.length < 6}
                                         >
                                             Confirm Delete
                                         </button>
@@ -501,8 +532,9 @@ const Profile = () => {
                                 </>
                             )}
 
+                            {/* Deleting in progress */}
                             {deleteStep === 'deleting' && (
-                                <p className="delete-warning">🗑️ Deleting your account… please wait.</p>
+                                <p className="delete-warning">🗑️ Permanently deleting your account… please wait.</p>
                             )}
 
                             {deleteError && (
@@ -511,8 +543,6 @@ const Profile = () => {
                         </div>
                     )}
 
-                    {/* Invisible reCAPTCHA container for re-auth */}
-                    <div id="delete-recaptcha"></div>
                 </div>
 
             </div>

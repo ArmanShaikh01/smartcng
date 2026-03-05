@@ -126,10 +126,21 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
         await createNotification(
             customerId,
             NOTIF_TYPE.BOOKING_CONFIRMED,
-            'Token Booked Successfully',
+            'Token Booked Successfully ✅',
             `You are #${newPosition} in queue. Estimated wait: ${estimatedWaitMinutes} min.`,
             { stationId, bookingId: bookingRef.id, vehicleNumber, queuePosition: newPosition }
         );
+
+        // ── Notification: check-in reminder for top-10 positions ─────────
+        if (newPosition <= 10) {
+            await createNotification(
+                customerId,
+                NOTIF_TYPE.CHECK_IN_REMINDER,
+                'Please Proceed to Station 📍',
+                `Your queue position is #${newPosition}. Please arrive at the station and check-in now.`,
+                { stationId, bookingId: bookingRef.id, vehicleNumber, queuePosition: newPosition }
+            );
+        }
 
         return {
             success: true,
@@ -211,6 +222,15 @@ export const checkInBooking = async (bookingId, location, customerId) => {
             timestamp: serverTimestamp(),
             metadata: { distance: location.distance }
         });
+
+        // ── Notification: check-in confirmed ─────────────────────────────
+        await createNotification(
+            customerId,
+            NOTIF_TYPE.CHECKED_IN_OK,
+            'Check-in Successful ✓',
+            'You are checked-in. Stay near the station — your fueling will begin shortly.',
+            { bookingId }
+        );
 
         return { success: true };
     } catch (error) {

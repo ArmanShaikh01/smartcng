@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
+import { createNotification, NOTIF_TYPE } from '../../firebase/notifications';
+import { logAuditAction, AUDIT_ACTION } from '../../utils/auditLog';
 import './OperatorManagement.css';
 
 const OperatorManagement = ({ stationId }) => {
@@ -77,7 +79,12 @@ const OperatorManagement = ({ stationId }) => {
                 createdAt: new Date()
             };
 
-            await addDoc(collection(db, COLLECTIONS.USERS), newOperator);
+            const docRef = await addDoc(collection(db, COLLECTIONS.USERS), newOperator);
+            await logAuditAction({
+                userId: docRef.id, role: 'owner', stationId,
+                actionType: AUDIT_ACTION.OPERATOR_ADD,
+                description: `Operator '${formData.name}' (${normalized}) added to station`
+            });
 
             alert(`Operator created! They can login with: ${normalized}`);
             setShowForm(false);
@@ -94,14 +101,43 @@ const OperatorManagement = ({ stationId }) => {
         if (!confirm('Are you sure you want to remove this operator?')) return;
 
         try {
-            await deleteDoc(doc(db, COLLECTIONS.USERS, operatorId));
+            // Get operator data from already-loaded state — avoids a getDoc
+            // (owners don't have single-doc read permission on other users' docs,
+            //  but the list query used by fetchOperators is allowed)
+            const operatorData = operators.find(op => op.id === operatorId) || null;
+            const operatorDocRef = doc(db, COLLECTIONS.USERS, operatorId);
+
+            await deleteDoc(operatorDocRef);
+
+            await logAuditAction({
+                userId: operatorId, role: 'owner', stationId,
+                actionType: AUDIT_ACTION.OPERATOR_REMOVE,
+                description: `Operator '${operatorData?.name || operatorId}' removed from station`
+            });
+
+            // Notify the operator
+            const notifyId = operatorData?.userId && operatorData.userId !== operatorId
+                ? operatorData.userId
+                : operatorId;
+
+            if (notifyId) {
+                await createNotification(
+                    notifyId,
+                    NOTIF_TYPE.OPERATOR_REMOVED,
+                    '⛔ Removed from Station',
+                    `You have been removed from the station. Contact the owner for details.`,
+                    { stationId: operatorData?.stationId }
+                );
+            }
+
             alert('Operator removed successfully');
             fetchOperators();
         } catch (error) {
             console.error('Error deleting operator:', error);
-            alert('Failed to remove operator');
+            alert('Failed to remove operator: ' + error.message);
         }
     };
+
 
     return (
         <div className="operator-management">

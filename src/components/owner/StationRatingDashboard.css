@@ -1,0 +1,67 @@
+/* StationRatingDashboard.css */
+.srd-loading { display:flex; justify-content:center; padding:20px; }
+
+.srd-container { margin-bottom: 20px; }
+
+.srd-warning {
+    background: #fef2f2;
+    border: 1.5px solid #fca5a5;
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.875rem;
+    color: #991b1b;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.srd-grid {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 14px;
+    align-items: start;
+}
+
+@media (max-width: 640px) {
+    .srd-grid { grid-template-columns: 1fr; }
+}
+
+.srd-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 16px;
+}
+
+.srd-card--main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 100px;
+}
+
+.srd-avg-num {
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: #111827;
+    line-height: 1;
+}
+
+.srd-stars { display:flex; gap:2px; margin: 6px 0 4px; }
+
+.srd-label { font-size:0.75rem; color:#9ca3af; }
+
+/* Breakdown */
+.srd-card--breakdown { padding: 12px 16px; }
+.srd-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
+.srd-bar-label { font-size:0.78rem; color:#6b7280; width:20px; text-align:right; flex-shrink:0; }
+.srd-bar-track { flex:1; background:#f3f4f6; border-radius:99px; height:7px; overflow:hidden; }
+.srd-bar-fill  { height:100%; background:linear-gradient(90deg,#f59e0b,#fbbf24); border-radius:99px; transition:width 0.4s; }
+.srd-bar-count { font-size:0.72rem; color:#9ca3af; width:18px; text-align:right; flex-shrink:0; }
+
+/* Complaints */
+.srd-card--complaints {
+    display: flex; flex-direction:column; align-items:center; min-width:110px;
+}
+.srd-res-rate { font-size:2rem; font-weight:800; line-height:1; }

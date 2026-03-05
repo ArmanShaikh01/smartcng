@@ -1,21 +1,48 @@
-// My Booking Component - Shows active booking and queue
-import { useState, useEffect } from 'react';
+// My Booking Component - Enhanced with live wait time, auto-cancel, ratings, complaints
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, getDocs, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import { cancelBooking } from '../../utils/queueLogic';
+import { useWaitTime } from '../../hooks/useWaitTime';
+import { useStationRating } from '../../hooks/useStationRating';
 import VisualQueue from '../shared/VisualQueue';
 import CheckInPrompt from './CheckInPrompt';
+import RatingModal from './RatingModal';
+import ComplaintForm from './ComplaintForm';
+import ComplaintTracker from './ComplaintTracker';
 import './MyBooking.css';
 
-const MyBooking = ({ booking, onBookingCancelled }) => {
-    const [station, setStation] = useState(null);
-    const [liveBooking, setLiveBooking] = useState(booking); // real-time updated copy
-    const [loading, setLoading] = useState(true);
-    const [showCheckIn, setShowCheckIn] = useState(false);
-    const [cancelling, setCancelling] = useState(false);
+const AUTO_CANCEL_SECONDS = 10 * 60; // 10 minutes
 
-    // Real-time listener on the booking document
+const MyBooking = ({ booking, onBookingCancelled }) => {
+    const [station, setStation]         = useState(null);
+    const [liveBooking, setLiveBooking] = useState(booking);
+    const [loading, setLoading]         = useState(true);
+    const [showCheckIn, setShowCheckIn] = useState(false);
+    const [cancelling, setCancelling]   = useState(false);
+
+    // New feature states
+    const [showRating, setShowRating]         = useState(false);
+    const [showComplaint, setShowComplaint]   = useState(false);
+    const [showTracker, setShowTracker]       = useState(false);
+    const [countdown, setCountdown]           = useState(null); // seconds remaining
+    const ratingShownRef                      = useRef(false);
+    const eligibleAtRef                       = useRef(null);
+    const countdownTimerRef                   = useRef(null);
+
+    // Live wait time hook (auto-refreshes every 5s, fires TURN_SOON at ≤2 ahead)
+    const { waitMinutes, vehiclesAhead } = useWaitTime(
+        booking.stationId,
+        liveBooking.queuePosition,
+        booking.customerId,
+        booking.id
+    );
+
+    // Station rating data
+    const { alreadyRated } = useStationRating(booking.stationId, booking.id);
+
+    // ── Real-time booking listener ─────────────────────────────────────────
     useEffect(() => {
         const unsubscribe = onSnapshot(
             doc(db, COLLECTIONS.BOOKINGS, booking.id),
@@ -33,8 +60,8 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         fetchStation();
     }, [booking.stationId]);
 
+    // ── Check-in prompt ───────────────────────────────────────────────────
     useEffect(() => {
-        // Auto-show check-in prompt when status becomes eligible
         if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn) {
             setShowCheckIn(true);
         } else {
@@ -42,10 +69,55 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         }
     }, [liveBooking.status, liveBooking.isCheckedIn]);
 
+    // ── Auto-cancel countdown (10 min from when eligible) ─────────────────
+    useEffect(() => {
+        // Start countdown when status becomes eligible and not yet checked in
+        if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn) {
+            if (!eligibleAtRef.current) {
+                // Use eligibleAt from Firestore if available, else now
+                const eligibleMs = liveBooking.eligibleAt?.toMillis?.() ?? Date.now();
+                eligibleAtRef.current = eligibleMs;
+            }
+
+            countdownTimerRef.current = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - eligibleAtRef.current) / 1000);
+                const remaining = AUTO_CANCEL_SECONDS - elapsed;
+
+                if (remaining <= 0) {
+                    clearInterval(countdownTimerRef.current);
+                    setCountdown(0);
+                    // Auto-cancel
+                    cancelBooking(booking.id, booking.customerId).then(r => {
+                        if (r.success) onBookingCancelled();
+                    });
+                } else {
+                    setCountdown(remaining);
+                }
+            }, 1000);
+        } else {
+            // Not eligible or already checked in — clear timer
+            clearInterval(countdownTimerRef.current);
+            setCountdown(null);
+            eligibleAtRef.current = null;
+        }
+
+        return () => clearInterval(countdownTimerRef.current);
+    }, [liveBooking.status, liveBooking.isCheckedIn]);
+
+    // ── Show rating modal when booking completes ───────────────────────────
+    useEffect(() => {
+        if (
+            liveBooking.status === 'completed' &&
+            !ratingShownRef.current &&
+            !alreadyRated
+        ) {
+            ratingShownRef.current = true;
+            setShowRating(true);
+        }
+    }, [liveBooking.status, alreadyRated]);
+
     const fetchStation = async () => {
         try {
-            // booking.stationId is a custom field (e.g. 'STATION_001'), NOT the Firestore doc ID
-            // — must query by field, not getDoc by ID
             const q = query(
                 collection(db, COLLECTIONS.STATIONS),
                 where('stationId', '==', booking.stationId)
@@ -54,8 +126,6 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             if (!snap.empty) {
                 const d = snap.docs[0];
                 setStation({ id: d.id, ...d.data() });
-            } else {
-                console.warn('Station not found for stationId:', booking.stationId);
             }
             setLoading(false);
         } catch (error) {
@@ -65,19 +135,21 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
     };
 
     const handleCancelBooking = async () => {
-        if (!confirm('Are you sure you want to cancel this booking?')) {
-            return;
-        }
-
+        if (!confirm('Are you sure you want to cancel this booking?')) return;
         setCancelling(true);
         const result = await cancelBooking(liveBooking.id, liveBooking.customerId);
-
         if (result.success) {
             onBookingCancelled();
         } else {
             alert('Failed to cancel booking. Please try again.');
             setCancelling(false);
         }
+    };
+
+    const formatCountdown = (secs) => {
+        const m = Math.floor(secs / 60).toString().padStart(2, '0');
+        const s = (secs % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
     };
 
     const getStatusDisplay = () => {
@@ -109,17 +181,30 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
     }
 
     const statusDisplay = getStatusDisplay();
+    const canCancel = !['fueling', 'checked_in', 'completed'].includes(liveBooking.status);
 
     return (
         <div className="my-booking-container">
-            {showCheckIn && station && (
-                <CheckInPrompt
-                    booking={liveBooking}
-                    station={station}
-                    onCheckInSuccess={() => setShowCheckIn(false)}
+
+            {showRating && station && (
+                <RatingModal
+                    stationId={booking.stationId}
+                    stationName={station.name}
+                    customerId={booking.customerId}
+                    bookingId={booking.id}
+                    onClose={() => setShowRating(false)}
+                />
+            )}
+            {showComplaint && (
+                <ComplaintForm
+                    customerId={booking.customerId}
+                    stationId={booking.stationId}
+                    bookingId={booking.id}
+                    onClose={() => setShowComplaint(false)}
                 />
             )}
 
+            {/* ── Header ── */}
             <div className="booking-header">
                 <h2>My Booking</h2>
                 <div className={`booking-status ${statusDisplay.color}`}>
@@ -128,6 +213,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
             </div>
 
+            {/* ── Info grid ── */}
             <div className="booking-info-grid">
                 <div className="info-card">
                     <div className="info-label">Queue Position</div>
@@ -135,8 +221,18 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
 
                 <div className="info-card">
-                    <div className="info-label">Estimated Wait</div>
-                    <div className="info-value">{liveBooking.estimatedWaitMinutes} min</div>
+                    <div className="info-label">
+                        Estimated Wait
+                        <span style={{ fontSize: '0.65rem', color: '#9ca3af', marginLeft: 4 }}>⟳5s</span>
+                    </div>
+                    <div className="info-value">
+                        {waitMinutes !== null ? `${waitMinutes} min` : `${liveBooking.estimatedWaitMinutes} min`}
+                    </div>
+                    {vehiclesAhead !== null && (
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', marginTop: 2 }}>
+                            {vehiclesAhead} vehicle{vehiclesAhead !== 1 ? 's' : ''} ahead
+                        </div>
+                    )}
                 </div>
 
                 <div className="info-card">
@@ -147,23 +243,64 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 <div className="info-card">
                     <div className="info-label">Station</div>
                     <div className="info-value">{station?.name || 'Loading...'}</div>
+                    {station && (
+                        <a
+                            href={
+                                station.location?.latitude
+                                    ? `https://www.google.com/maps/dir/?api=1&destination=${station.location.latitude},${station.location.longitude}`
+                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(station.address || station.name)}`
+                            }
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                                fontSize: '0.72rem', fontWeight: 600,
+                                color: '#1a73e8', textDecoration: 'none',
+                                marginTop: 4,
+                                padding: '3px 8px',
+                                background: '#e8f0fe',
+                                borderRadius: 6
+                            }}
+                        >
+                            🗺️ Get Directions
+                        </a>
+                    )}
                 </div>
             </div>
 
-            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+            {/* ── Check-in prompt — inline card, not a modal ── */}
+            {showCheckIn && station && (
+                <CheckInPrompt
+                    booking={liveBooking}
+                    station={station}
+                    onCheckInSuccess={() => setShowCheckIn(false)}
+                />
+            )}
+
+
+            {countdown !== null && countdown > 0 && liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+                <div className="check-in-urgency" style={{
+                    background: countdown < 120 ? '#fef2f2' : '#fef9ec',
+                    border: `1.5px solid ${countdown < 120 ? '#fca5a5' : '#fcd34d'}`,
+                    borderRadius: 12, padding: '12px 16px', marginTop: 12,
+                    display: 'flex', alignItems: 'center', gap: 10
+                }}>
+                    <span style={{ fontSize: '1.4rem' }}>⏱️</span>
+                    <div>
+                        <div style={{ fontWeight: 700, color: countdown < 120 ? '#dc2626' : '#b45309', fontSize: '1.1rem' }}>
+                            {formatCountdown(countdown)} remaining
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                            Check-in now or your booking will be auto-cancelled
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Check-in reminder (text only — button is in CheckInPrompt card above) ── */}
+            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && !showCheckIn && (
                 <div className="check-in-reminder">
-                    <p>⚠️ You are now eligible to check-in. Please arrive at the station and check-in within 5 minutes.</p>
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setShowCheckIn(true);
-                        }}
-                        className="btn btn-primary btn-block"
-                    >
-                        Check-in Now
-                    </button>
+                    <p>⚠️ You are now eligible to check-in. Please arrive at the station and check-in within 10 minutes.</p>
                 </div>
             )}
 
@@ -173,6 +310,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
             )}
 
+            {/* ── Live Queue ── */}
             <div className="queue-section">
                 <h3>Live Queue</h3>
                 <VisualQueue
@@ -183,15 +321,41 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 />
             </div>
 
-            {liveBooking.status !== 'fueling' && liveBooking.status !== 'checked_in' && (
+            {/* ── Actions ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
+                {canCancel && (
+                    <button
+                        type="button"
+                        onClick={handleCancelBooking}
+                        className="btn btn-danger btn-block"
+                        disabled={cancelling}
+                    >
+                        {cancelling ? 'Cancelling...' : 'Cancel Booking'}
+                    </button>
+                )}
+
                 <button
                     type="button"
-                    onClick={handleCancelBooking}
-                    className="btn btn-danger btn-block"
-                    disabled={cancelling}
+                    onClick={() => setShowComplaint(true)}
+                    className="btn btn-outline btn-block"
                 >
-                    {cancelling ? 'Cancelling...' : 'Cancel Booking'}
+                    📋 File a Complaint
                 </button>
+
+                <button
+                    type="button"
+                    onClick={() => setShowTracker(!showTracker)}
+                    className="btn btn-outline btn-block"
+                >
+                    {showTracker ? '▲ Hide My Complaints' : '▼ My Complaints History'}
+                </button>
+            </div>
+
+            {/* ── Complaints tracker ── */}
+            {showTracker && (
+                <div style={{ marginTop: 16 }}>
+                    <ComplaintTracker customerId={booking.customerId} />
+                </div>
             )}
         </div>
     );

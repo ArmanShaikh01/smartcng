@@ -56,7 +56,8 @@
     border-radius: var(--radius-base);
     border: 1px solid var(--color-neutral-100);
     box-shadow: var(--shadow-sm);
-    overflow: hidden;
+    /* overflow: clip keeps border-radius visual clipping without creating a scroll container */
+    overflow: clip;
 }
 
 .users-table-scroll {
@@ -141,27 +142,151 @@
 }
 
 /* ── Delete Button ── */
-.btn-delete {
-    padding: var(--space-1) var(--space-3);
-    background: rgba(220,38,38,0.07);
-    color: var(--color-error);
-    border: 1px solid rgba(220,38,38,0.2);
-    border-radius: var(--radius-base);
-    cursor: pointer;
-    font-size: var(--text-xs);
-    font-weight: var(--font-bold);
-    font-family: var(--font-heading);
-    transition: all var(--duration-fast) var(--ease-out);
-    white-space: nowrap;
+/* ── Action button group ── */
+.um-action-btns {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: nowrap;
 }
 
+/* shared base for all action buttons */
+.btn-delete,
+.btn-block,
+.btn-unblock {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    min-width: 64px;
+    padding: 0 10px;
+    border-radius: var(--radius-base);
+    border-width: 1px;
+    border-style: solid;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: var(--font-bold);
+    font-family: var(--font-heading);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.btn-delete {
+    background: rgba(220,38,38,0.07);
+    color: #c0392b;
+    border-color: rgba(220,38,38,0.25);
+}
 .btn-delete:hover {
     background: rgba(220,38,38,0.15);
-    border-color: rgba(220,38,38,0.4);
+    border-color: rgba(220,38,38,0.45);
     color: #991b1b;
 }
+
+/* ── Block / Unblock colors ── */
+.btn-block {
+    background: rgba(245,158,11,0.08);
+    color: #b45309;
+    border-color: rgba(245,158,11,0.28);
+}
+.btn-block:hover {
+    background: rgba(245,158,11,0.18);
+    border-color: rgba(245,158,11,0.5);
+    color: #92400e;
+}
+
+.btn-unblock {
+    background: rgba(14,124,91,0.08);
+    color: var(--color-primary-700);
+    border-color: rgba(14,124,91,0.25);
+}
+.btn-unblock:hover {
+    background: rgba(14,124,91,0.18);
+    border-color: rgba(14,124,91,0.45);
+}
+
+
+
+
+
+/* ── Blocked row tint ── */
+.um-row-blocked td {
+    background: rgba(220,38,38,0.04);
+}
+.um-row-blocked:hover td {
+    background: rgba(220,38,38,0.08);
+}
+
+/* ── Banned badge (next to name) ── */
+.um-banned-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: var(--space-2);
+    padding: 1px 7px;
+    background: rgba(220,38,38,0.10);
+    color: #b91c1c;
+    border: 1px solid rgba(220,38,38,0.22);
+    border-radius: var(--radius-full);
+    font-size: 10px;
+    font-weight: var(--font-bold);
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+}
+
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .um-header { flex-direction: column; align-items: flex-start; }
+    .um-form { padding: var(--space-4) var(--space-3); }
+}
+
+@media (max-width: 480px) {
+    /* Convert table to card stack */
+    .users-table-scroll { overflow-x: unset; }
+
+    .users-table table,
+    .users-table thead,
+    .users-table tbody,
+    .users-table th,
+    .users-table td,
+    .users-table tr { display: block; }
+
+    .users-table thead { display: none; } /* hide header row */
+
+    .users-table tbody tr {
+        background: var(--color-neutral-0);
+        border: 1px solid var(--color-neutral-100);
+        border-radius: var(--radius-base);
+        margin-bottom: var(--space-3);
+        padding: var(--space-3);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .users-table tbody tr:hover { background: var(--color-neutral-50); }
+
+    .users-table td {
+        border-bottom: 1px solid var(--color-neutral-50);
+        padding: var(--space-2) 0;
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        font-size: var(--text-sm);
+    }
+
+    .users-table td:last-child { border-bottom: none; }
+
+    /* Show data-label as prefix */
+    .users-table td::before {
+        content: attr(data-label);
+        font-size: var(--text-xs);
+        font-weight: var(--font-bold);
+        font-family: var(--font-heading);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--color-neutral-400);
+        min-width: 64px;
+        flex-shrink: 0;
+    }
 }
