@@ -1,19 +1,31 @@
-// Station List Component — enhanced with rush level badge and avg rating
+// Station List Component — enhanced with rush level badge, avg rating & ETA
 import { useState, useEffect } from 'react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import { useGeolocation, calculateDistance } from '../../hooks/useGeolocation';
 import { useRushLevel, formatHour } from '../../hooks/useRushLevel';
+import { useEstimatedWait } from '../../hooks/useEstimatedWait';
 import Icon from '../shared/Icon';
 import './StationList.css';
 
 // ── Per-station sub-component so each station gets its own hooks ─────────────
 const StationCard = ({ station, index, isNearest, onSelectStation }) => {
     const { currentRush, bestHour, loading: rushLoading } = useRushLevel(station.stationId);
+    const { estimatedMinutes, queueLength, loading: etaLoading } = useEstimatedWait(station.stationId);
     const [avgRating, setAvgRating] = useState(null);
-    const [totalRatings, setTotal]  = useState(0);
+    const [totalRatings, setTotal] = useState(0);
     const isAvailable = station.gasOn && station.bookingOn;
+
+    // ETA badge config
+    const getEtaConfig = () => {
+        if (etaLoading) return { text: '...', className: 'sc__eta--loading' };
+        if (queueLength === 0) return { text: '⚡ No Wait', className: 'sc__eta--free' };
+        if (estimatedMinutes <= 9) return { text: `⏱ ~${estimatedMinutes} min`, className: 'sc__eta--low' };
+        if (estimatedMinutes <= 20) return { text: `⏱ ~${estimatedMinutes} min`, className: 'sc__eta--med' };
+        return { text: `⏱ ~${estimatedMinutes} min`, className: 'sc__eta--high' };
+    };
+    const eta = getEtaConfig();
 
     // Fetch avg rating for this station
     useEffect(() => {
@@ -36,9 +48,9 @@ const StationCard = ({ station, index, isNearest, onSelectStation }) => {
     }, [station.stationId]);
 
     const rushConfig = {
-        low:    { label: 'Low Rush',    color: '#065f46', bg: '#d1fae5', emoji: '🟢' },
+        low: { label: 'Low Rush', color: '#065f46', bg: '#d1fae5', emoji: '🟢' },
         medium: { label: 'Medium Rush', color: '#92400e', bg: '#fef3c7', emoji: '🟡' },
-        high:   { label: 'High Rush',   color: '#991b1b', bg: '#fee2e2', emoji: '🔴' },
+        high: { label: 'High Rush', color: '#991b1b', bg: '#fee2e2', emoji: '🔴' },
     };
     const rush = rushConfig[currentRush] || rushConfig.low;
 
@@ -52,6 +64,11 @@ const StationCard = ({ station, index, isNearest, onSelectStation }) => {
             role="button"
             tabIndex={isAvailable ? 0 : -1}
         >
+            {/* ── ETA Badge (top-right corner) ── */}
+            <div className={`sc__eta ${eta.className}`}>
+                {eta.text}
+            </div>
+
             {/* ── Top row ── */}
             <div className="sc__header">
                 <div className="sc__icon">
@@ -157,14 +174,14 @@ const StationCard = ({ station, index, isNearest, onSelectStation }) => {
 
 // ── Main StationList ──────────────────────────────────────────────────────────
 const StationList = ({ onSelectStation }) => {
-    const [stations, setStations]               = useState([]);
-    const [loading, setLoading]                 = useState(true);
-    const [error, setError]                     = useState(null);
+    const [stations, setStations] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const { location, error: locationError, getLocation } = useGeolocation();
 
     useEffect(() => {
         fetchStations();
-        getLocation().catch(() => {});
+        getLocation().catch(() => { });
     }, []);
 
     useEffect(() => {
@@ -201,7 +218,7 @@ const StationList = ({ onSelectStation }) => {
     };
 
     if (loading) return <div className="sl-state"><div className="sl-spinner" /><p>Loading stations...</p></div>;
-    if (error)   return <div className="sl-state"><Icon name="alertTriangle" size={32} color="#f59e0b" /><p>{error}</p><button type="button" onClick={fetchStations} className="sl-retry-btn">Retry</button></div>;
+    if (error) return <div className="sl-state"><Icon name="alertTriangle" size={32} color="#f59e0b" /><p>{error}</p><button type="button" onClick={fetchStations} className="sl-retry-btn">Retry</button></div>;
     if (stations.length === 0) return <div className="sl-state"><Icon name="station" size={32} color="#9ca3af" /><p>No stations available</p></div>;
 
     return (
