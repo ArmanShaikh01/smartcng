@@ -64,11 +64,6 @@ const StationCard = ({ station, index, isNearest, onSelectStation }) => {
             role="button"
             tabIndex={isAvailable ? 0 : -1}
         >
-            {/* ── ETA Badge (top-right corner) ── */}
-            <div className={`sc__eta ${eta.className}`}>
-                {eta.text}
-            </div>
-
             {/* ── Top row ── */}
             <div className="sc__header">
                 <div className="sc__icon">
@@ -138,6 +133,10 @@ const StationCard = ({ station, index, isNearest, onSelectStation }) => {
             {/* ── Footer ── */}
             <div className="sc__footer">
                 <div className="sc__info">
+                    {/* ETA badge */}
+                    <span className={`sc__eta ${eta.className}`}>
+                        {eta.text}
+                    </span>
                     {station.distance !== undefined && (
                         <span className="sc__dist">
                             <Icon name="ruler" size={13} color="#6b7280" />
