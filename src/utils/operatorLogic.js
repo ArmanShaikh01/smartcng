@@ -15,6 +15,7 @@ import {
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
+import { getLaneOrder, recalculateLanePositions, expireStaleCheckIns } from './laneLogic';
 
 /**
  * Toggle station gas status
@@ -218,21 +219,13 @@ export const advanceQueue = async (stationId, operatorId) => {
             )
         );
 
-        // Collect remaining bookings into array and sort smartly:
-        // Checked-in vehicles should be served before non-arrived ones.
-        // Priority: checked_in first (sorted by original position), then the rest (by position).
+        // Collect remaining bookings and sort using lane-priority logic:
+        // Checked-in vehicles sorted by checkedInAt (physical lane order),
+        // then eligible (not checked in) by queuePosition, then waiting.
         const remaining = remainingBookings.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sorted = getLaneOrder(remaining);
 
-        // Separate checked-in from non-arrived
-        const checkedIn = remaining.filter(b => b.isCheckedIn || b.status === 'checked_in')
-            .sort((a, b) => a.queuePosition - b.queuePosition);
-        const notArrived = remaining.filter(b => !b.isCheckedIn && b.status !== 'checked_in')
-            .sort((a, b) => a.queuePosition - b.queuePosition);
-
-        // Merge: checked-in first, then non-arrived
-        const sorted = [...checkedIn, ...notArrived];
-
-        // Update all positions based on new order
+        // Update all positions based on new lane order
         const batch = writeBatch(db);
         let nextVehicleNumber = null;
 
@@ -251,6 +244,7 @@ export const advanceQueue = async (stationId, operatorId) => {
 
             batch.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
                 queuePosition: newPosition,
+                lanePosition: newPosition,
                 status: newStatus,
                 eligibleAt: newPosition <= 10 && !booking.eligibleAt
                     ? serverTimestamp()
@@ -307,8 +301,25 @@ export const advanceQueue = async (stationId, operatorId) => {
                 )
         );
 
-        // 4. Queue backlog alert to owner if queue > 15
-        const queueLen = sorted.length + 1; // +1 for the one just fueling
+        // 4. SAFEGUARD 3: Pre-arrival notification for positions 11-13
+        const preArrival = sorted.filter(b =>
+            b.queuePosition >= 11 && b.queuePosition <= 13 && b.customerId
+        );
+        await Promise.all(preArrival.map(b =>
+            createNotification(
+                b.customerId,
+                NOTIF_TYPE.PRE_ARRIVAL_ALERT,
+                '🚗 Get Ready! Your turn is approaching',
+                `You are #${b.queuePosition} in queue. Start heading to the station now!`,
+                { stationId, bookingId: b.id, vehicleNumber: b.vehicleNumber, queuePosition: b.queuePosition }
+            )
+        ));
+
+        // 5. Expire stale check-ins (Safeguard 2)
+        await expireStaleCheckIns(stationId);
+
+        // 6. Queue backlog alert to owner if queue > 15
+        const queueLen = sorted.length + 1; // +1 for the one just completed
         if (queueLen > 15) {
             const stationDataSnap = await getDocs(
                 query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', stationId))
@@ -401,16 +412,10 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
 
         const remainingList = remaining.docs.map(d => ({ id: d.id, ...d.data() }));
 
-        // Keep fueling at pos 1, checked-in next, then non-arrived
+        // Use lane-priority sorting: fueling first, then checked-in by checkedInAt, then rest
         const fueling = remainingList.filter(b => b.status === 'fueling');
-        const checkedIn = remainingList
-            .filter(b => b.isCheckedIn && b.status !== 'fueling')
-            .sort((a, b) => a.queuePosition - b.queuePosition);
-        const notArrived = remainingList
-            .filter(b => !b.isCheckedIn && b.status !== 'fueling')
-            .sort((a, b) => a.queuePosition - b.queuePosition);
-
-        const sorted = [...fueling, ...checkedIn, ...notArrived];
+        const rest = remainingList.filter(b => b.status !== 'fueling');
+        const sorted = [...fueling, ...getLaneOrder(rest)];
 
         const batch = writeBatch(db);
         sorted.forEach((booking, index) => {
@@ -426,6 +431,7 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
 
             batch.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
                 queuePosition: newPosition,
+                lanePosition: newPosition,
                 status: newStatus,
                 estimatedWaitMinutes: (newPosition - 1) * 3,
                 updatedAt: serverTimestamp()
@@ -454,6 +460,78 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
         return { success: true };
     } catch (error) {
         console.error('Error marking no-show:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Skip a checked-in vehicle — moves it to the end of the checked-in group.
+ * If skipCount reaches 3, auto-marks as no-show.
+ *
+ * @param {string} bookingId - Booking document ID
+ * @param {string} vehicleNumber - Vehicle number (for logging)
+ * @param {string} stationId - Station ID
+ * @param {string} operatorId - Operator user ID
+ * @returns {Promise<{success: boolean}>}
+ */
+export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorId) => {
+    try {
+        const bookingRef = doc(db, COLLECTIONS.BOOKINGS, bookingId);
+        const bookingSnap = await getDoc(bookingRef);
+
+        if (!bookingSnap.exists()) {
+            return { success: false, error: 'Booking not found' };
+        }
+
+        const bookingData = bookingSnap.data();
+        const newSkipCount = (bookingData.skipCount || 0) + 1;
+
+        // If skipped 3 times → auto no-show
+        if (newSkipCount >= 3) {
+            return await markNoShow(bookingId, vehicleNumber, stationId, operatorId);
+        }
+
+        // Reset check-in → move to end of checked-in group
+        await updateDoc(bookingRef, {
+            isCheckedIn: false,
+            checkedInAt: null,
+            checkInLocation: null,
+            status: 'eligible',
+            skipCount: newSkipCount,
+            skippedAt: serverTimestamp(),
+            skipReason: 'operator_skip',
+            updatedAt: serverTimestamp()
+        });
+
+        // Log the skip
+        await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
+            stationId,
+            bookingId,
+            vehicleNumber,
+            action: 'skipped',
+            performedBy: operatorId,
+            performedByRole: 'operator',
+            timestamp: serverTimestamp(),
+            metadata: { skipCount: newSkipCount }
+        });
+
+        // Recalculate lane positions
+        await recalculateLanePositions(stationId);
+
+        // Notify customer
+        if (bookingData.customerId) {
+            await createNotification(
+                bookingData.customerId,
+                NOTIF_TYPE.VEHICLE_SKIPPED,
+                '⚠️ Vehicle Skipped',
+                `Your vehicle ${vehicleNumber} was skipped (${newSkipCount}/3). Check in again when you're at the pump.`,
+                { stationId, bookingId, vehicleNumber, skipCount: newSkipCount }
+            );
+        }
+
+        return { success: true, skipCount: newSkipCount };
+    } catch (error) {
+        console.error('Error skipping vehicle:', error);
         return { success: false, error: error.message };
     }
 };

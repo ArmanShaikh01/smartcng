@@ -18,20 +18,20 @@ import './MyBooking.css';
 const AUTO_CANCEL_SECONDS = 10 * 60; // 10 minutes
 
 const MyBooking = ({ booking, onBookingCancelled }) => {
-    const [station, setStation]         = useState(null);
+    const [station, setStation] = useState(null);
     const [liveBooking, setLiveBooking] = useState(booking);
-    const [loading, setLoading]         = useState(true);
+    const [loading, setLoading] = useState(true);
     const [showCheckIn, setShowCheckIn] = useState(false);
-    const [cancelling, setCancelling]   = useState(false);
+    const [cancelling, setCancelling] = useState(false);
 
     // New feature states
-    const [showRating, setShowRating]         = useState(false);
-    const [showComplaint, setShowComplaint]   = useState(false);
-    const [showTracker, setShowTracker]       = useState(false);
-    const [countdown, setCountdown]           = useState(null); // seconds remaining
-    const ratingShownRef                      = useRef(false);
-    const eligibleAtRef                       = useRef(null);
-    const countdownTimerRef                   = useRef(null);
+    const [showRating, setShowRating] = useState(false);
+    const [showComplaint, setShowComplaint] = useState(false);
+    const [showTracker, setShowTracker] = useState(false);
+    const [countdown, setCountdown] = useState(null); // seconds remaining
+    const ratingShownRef = useRef(false);
+    const eligibleAtRef = useRef(null);
+    const countdownTimerRef = useRef(null);
 
     // Live wait time hook (auto-refreshes every 5s, fires TURN_SOON at ≤2 ahead)
     const { waitMinutes, vehiclesAhead } = useWaitTime(
@@ -223,8 +223,13 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             {/* ── Info grid ── */}
             <div className="booking-info-grid">
                 <div className="info-card">
-                    <div className="info-label">Queue Position</div>
-                    <div className="info-value large">#{liveBooking.queuePosition}</div>
+                    <div className="info-label">Lane Position</div>
+                    <div className="info-value large">#{liveBooking.lanePosition ?? liveBooking.queuePosition}</div>
+                    {(liveBooking.lanePosition && liveBooking.lanePosition !== liveBooking.queuePosition) && (
+                        <div style={{ fontSize: '0.65rem', color: '#9ca3af', marginTop: 2 }}>
+                            Token #{liveBooking.queuePosition}
+                        </div>
+                    )}
                 </div>
 
                 <div className="info-card">
@@ -316,6 +321,45 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                     <p>⛽ Your vehicle is currently being fueled. Please wait...</p>
                 </div>
             )}
+
+            {/* ── Lane position info banners ── */}
+            {liveBooking.lanePosition && liveBooking.lanePosition > liveBooking.queuePosition &&
+                !['fueling', 'completed'].includes(liveBooking.status) && (
+                    <div style={{
+                        background: '#fef3c7', border: '1px solid #fcd34d',
+                        borderRadius: 12, padding: '12px 16px', marginTop: 12,
+                        display: 'flex', alignItems: 'center', gap: 10
+                    }}>
+                        <span style={{ fontSize: '1.4rem' }}>⚡</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#b45309', fontSize: '0.9rem' }}>
+                                Checked-in vehicles are ahead
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                Your token is #{liveBooking.queuePosition}, but {liveBooking.lanePosition - liveBooking.queuePosition} checked-in vehicle(s) are ahead in the lane. Check in now to move up!
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+            {liveBooking.lanePosition && liveBooking.lanePosition < liveBooking.queuePosition &&
+                !['fueling', 'completed'].includes(liveBooking.status) && (
+                    <div style={{
+                        background: '#ecfdf5', border: '1px solid #6ee7b7',
+                        borderRadius: 12, padding: '12px 16px', marginTop: 12,
+                        display: 'flex', alignItems: 'center', gap: 10
+                    }}>
+                        <span style={{ fontSize: '1.4rem' }}>🎉</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#047857', fontSize: '0.9rem' }}>
+                                You're ahead!
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                                Lane position #{liveBooking.lanePosition} (token was #{liveBooking.queuePosition}). You checked in early!
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             {/* ── Live Queue ── */}
             <div className="queue-section">

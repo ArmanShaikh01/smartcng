@@ -192,7 +192,8 @@ service cloud.firestore {
 
       // Customer can only modify these fields
       function onlyCustomerFields() {
-        let allowed = ['status', 'isCheckedIn', 'checkedInAt', 'checkInLocation', 'updatedAt'];
+        let allowed = ['status', 'isCheckedIn', 'checkedInAt', 'checkInLocation', 'updatedAt',
+                        'lanePosition', 'fuelingStartedAt'];
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
       }
     }

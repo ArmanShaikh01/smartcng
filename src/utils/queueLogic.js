@@ -4,6 +4,7 @@ import {
     query,
     where,
     getDocs,
+    getDoc,
     addDoc,
     updateDoc,
     doc,
@@ -13,6 +14,7 @@ import {
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
+import { recalculateLanePositions } from './laneLogic';
 
 /**
  * Validate if booking is allowed
@@ -92,6 +94,7 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
             customerPhone,
             queuePosition: newPosition,
             originalPosition: newPosition,
+            lanePosition: newPosition,
             status: newPosition <= 10 ? 'eligible' : 'waiting',
             isCheckedIn: false,
             checkedInAt: null,
@@ -199,11 +202,25 @@ export const cancelBooking = async (bookingId, customerId) => {
  * @param {string} bookingId - Booking ID
  * @param {object} location - {latitude, longitude, accuracy}
  * @param {string} customerId - Customer user ID
+ * @param {string} stationId - Station ID (for lane recalculation)
  * @returns {Promise<{success: boolean}>}
  */
-export const checkInBooking = async (bookingId, location, customerId) => {
+export const checkInBooking = async (bookingId, location, customerId, stationId) => {
     try {
         const bookingRef = doc(db, COLLECTIONS.BOOKINGS, bookingId);
+
+        // ── SAFEGUARD 1: Top-10 check-in gate ────────────────────────────
+        const bookingSnap = await getDoc(bookingRef);
+        if (!bookingSnap.exists()) {
+            return { success: false, error: 'Booking not found.' };
+        }
+        const bookingData = bookingSnap.data();
+        if (bookingData.queuePosition > 10) {
+            return { success: false, error: 'Check-in is only available for top 10 positions. Your position: #' + bookingData.queuePosition };
+        }
+
+        // Resolve stationId from booking if not passed
+        const resolvedStationId = stationId || bookingData.stationId;
 
         await updateDoc(bookingRef, {
             isCheckedIn: true,
@@ -216,6 +233,7 @@ export const checkInBooking = async (bookingId, location, customerId) => {
         // Log check-in
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             bookingId,
+            stationId: resolvedStationId,
             action: 'checked_in',
             performedBy: customerId,
             performedByRole: 'customer',
@@ -223,13 +241,43 @@ export const checkInBooking = async (bookingId, location, customerId) => {
             metadata: { distance: location.distance }
         });
 
+        // ── Auto-fuel: if no vehicle currently fueling, this is the first ─
+        const fuelingSnap = await getDocs(
+            query(
+                collection(db, COLLECTIONS.BOOKINGS),
+                where('stationId', '==', resolvedStationId),
+                where('status', '==', 'fueling')
+            )
+        );
+
+        if (fuelingSnap.empty) {
+            // No one fueling → this vehicle becomes the first to fuel
+            await updateDoc(bookingRef, {
+                status: 'fueling',
+                fuelingStartedAt: serverTimestamp(),
+                lanePosition: 1,
+                updatedAt: serverTimestamp()
+            });
+
+            await createNotification(
+                customerId,
+                NOTIF_TYPE.TURN_ARRIVED,
+                '🚨 Your Turn Has Arrived!',
+                'You are first at the pump. Fueling will begin shortly.',
+                { stationId: resolvedStationId, bookingId }
+            );
+        }
+
+        // ── Recalculate lane positions for all station bookings ───────────
+        await recalculateLanePositions(resolvedStationId);
+
         // ── Notification: check-in confirmed ─────────────────────────────
         await createNotification(
             customerId,
             NOTIF_TYPE.CHECKED_IN_OK,
             'Check-in Successful ✓',
             'You are checked-in. Stay near the station — your fueling will begin shortly.',
-            { bookingId }
+            { bookingId, stationId: resolvedStationId }
         );
 
         return { success: true };

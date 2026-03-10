@@ -1,8 +1,23 @@
-// Awareness Panel - Shows current and next vehicle
+// Awareness Panel - Shows current and next vehicle (lane-priority aware)
 import Icon from '../shared/Icon';
 import './AwarenessPanel.css';
 
 const AwarenessPanel = ({ currentVehicle, nextVehicle, queueLength }) => {
+    const renderPosition = (vehicle) => {
+        const lanePos = vehicle.lanePosition ?? vehicle.queuePosition;
+        const tokenPos = vehicle.queuePosition;
+        return (
+            <>
+                <div className="vehicle-position">Lane #{lanePos}</div>
+                {lanePos !== tokenPos && (
+                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 1 }}>
+                        Token #{tokenPos}
+                    </div>
+                )}
+            </>
+        );
+    };
+
     return (
         <div className="awareness-panel">
             <h3>Queue Status</h3>
@@ -18,7 +33,7 @@ const AwarenessPanel = ({ currentVehicle, nextVehicle, queueLength }) => {
                         {currentVehicle ? (
                             <>
                                 <div className="vehicle-number-large">{currentVehicle.vehicleNumber}</div>
-                                <div className="vehicle-position">Position #{currentVehicle.queuePosition}</div>
+                                {renderPosition(currentVehicle)}
                                 {currentVehicle.isCheckedIn && (
                                     <div className="vehicle-status checked-in">
                                         <Icon name="check" size={12} /> Checked-in
@@ -41,7 +56,7 @@ const AwarenessPanel = ({ currentVehicle, nextVehicle, queueLength }) => {
                         {nextVehicle ? (
                             <>
                                 <div className="vehicle-number-large">{nextVehicle.vehicleNumber}</div>
-                                <div className="vehicle-position">Position #{nextVehicle.queuePosition}</div>
+                                {renderPosition(nextVehicle)}
                                 {nextVehicle.isCheckedIn ? (
                                     <div className="vehicle-status checked-in">
                                         <Icon name="checkCircle" size={12} /> Present
@@ -75,3 +90,4 @@ const AwarenessPanel = ({ currentVehicle, nextVehicle, queueLength }) => {
 };
 
 export default AwarenessPanel;
+

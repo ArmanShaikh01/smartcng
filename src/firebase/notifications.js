@@ -26,34 +26,40 @@ const itemsRef = (userId) =>
 // ─── Notification Types ─────────────────────────────────────────────────────
 export const NOTIF_TYPE = {
     // Customer
-    BOOKING_CONFIRMED:     'booking_confirmed',
-    BOOKING_CANCELLED:     'booking_cancelled',
-    BOOKING_NO_SHOW:       'booking_no_show',
-    QUEUE_POSITION_UPDATED:'queue_position_updated',
-    TURN_ARRIVED:          'turn_arrived',
-    TURN_SOON:             'turn_soon',
-    FUELING_COMPLETED:     'fueling_completed',
+    BOOKING_CONFIRMED: 'booking_confirmed',
+    BOOKING_CANCELLED: 'booking_cancelled',
+    BOOKING_NO_SHOW: 'booking_no_show',
+    QUEUE_POSITION_UPDATED: 'queue_position_updated',
+    TURN_ARRIVED: 'turn_arrived',
+    TURN_SOON: 'turn_soon',
+    FUELING_COMPLETED: 'fueling_completed',
 
     // Customer — check-in flow
-    CHECK_IN_REMINDER:     'check_in_reminder',
-    CHECKED_IN_OK:         'checked_in_ok',
+    CHECK_IN_REMINDER: 'check_in_reminder',
+    CHECKED_IN_OK: 'checked_in_ok',
+
+    // Customer — lane-priority
+    PRE_ARRIVAL_ALERT: 'pre_arrival_alert',
+    CHECK_IN_EXPIRED: 'check_in_expired',
+    VEHICLE_SKIPPED: 'vehicle_skipped',
+    LANE_OVERTAKEN: 'lane_overtaken',
 
     // Operator
-    BOOKING_CLOSED:        'booking_closed',
-    QUEUE_ALERT:           'queue_alert',
-    OPERATOR_ADDED:        'operator_added',
-    OPERATOR_REMOVED:      'operator_removed',
-    OPERATOR_INACTIVE:     'operator_inactive',
+    BOOKING_CLOSED: 'booking_closed',
+    QUEUE_ALERT: 'queue_alert',
+    OPERATOR_ADDED: 'operator_added',
+    OPERATOR_REMOVED: 'operator_removed',
+    OPERATOR_INACTIVE: 'operator_inactive',
 
     // Owner
-    GAS_TURNED_OFF:        'gas_turned_off',
-    GAS_TURNED_ON:         'gas_turned_on',
-    STATION_BOOKING_OFF:   'station_booking_off',
-    STATION_BOOKING_ON:    'station_booking_on',
-    QUEUE_BACKLOG_ALERT:   'queue_backlog_alert',
+    GAS_TURNED_OFF: 'gas_turned_off',
+    GAS_TURNED_ON: 'gas_turned_on',
+    STATION_BOOKING_OFF: 'station_booking_off',
+    STATION_BOOKING_ON: 'station_booking_on',
+    QUEUE_BACKLOG_ALERT: 'queue_backlog_alert',
 
     // Admin (reserved for future use)
-    SYSTEM_ALERT:          'system_alert',
+    SYSTEM_ALERT: 'system_alert',
 };
 
 /**
