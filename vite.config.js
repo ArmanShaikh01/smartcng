@@ -1,125 +1,81 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import path from 'path'
+import fs from 'fs'
+
+// ── HASH IN PATH WORKAROUND ─────────────────────────────────────────────────
+// Vite 7 / Rollup 4 normalise file-system paths as URLs internally.
+// When the project lives under  D:\C#\...  the '#' is treated as a URL
+// fragment separator, breaking every relative import resolution.
+//
+// Fix: a custom Rollup plugin that intercepts `resolveId` and rewrites any
+// resolved IDs that still contain 'C#' to go through the junction
+// D:\SmartCNG (which was created with: cmd /c mklink /J D:\SmartCNG "D:\C#\smart cng station")
+//
+// This only applies when running from the junction path.  If vite is ever
+// started from the original C# path the junction rewrite still applies and
+// prevents the '#' from reaching Rollup's URL normalization.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const JUNCTION = 'D:/SmartCNG'
+const HASH_PATH = 'D:/C#/smart cng station'
+const HASH_PATH_ENCODED = 'D:/C%23/smart%20cng%20station'
+
+/** Replace any occurrence of the real path with the junction path */
+function toJunctionPath(id) {
+  if (!id) return id
+  // Normalize to forward slashes
+  const norm = id.replace(/\\/g, '/')
+  if (norm.includes('C#') || norm.includes('C%23')) {
+    return norm
+      .replace(/D:\/C%23\/smart%20cng%20station/g, JUNCTION)
+      .replace(/D:\/C#\/smart cng station/g, JUNCTION)
+  }
+  return id
+}
+
+/** Custom plugin: rewrites all module IDs that contain '#' → junction */
+function hashPathFixPlugin() {
+  return {
+    name: 'hash-path-fix',
+    enforce: 'pre',
+    resolveId(source, importer) {
+      if (!importer) return null
+      // If the resolved importer contains '#', redirect through junction
+      const fixedImporter = toJunctionPath(importer)
+      if (fixedImporter !== importer) {
+        // Resolve relative to the junction-fixed importer path
+        if (source.startsWith('.')) {
+          const importerDir = path.dirname(fixedImporter)
+          const resolved = path.resolve(importerDir, source)
+          // Check for extension variants
+          const exts = ['', '.jsx', '.js', '.ts', '.tsx', '.json', '/index.jsx', '/index.js']
+          for (const ext of exts) {
+            const candidate = resolved + ext
+            if (fs.existsSync(candidate)) {
+              return candidate
+            }
+          }
+        }
+      }
+      return null
+    },
+    load(id) {
+      // Rewrite ID to junction path before loading
+      const fixedId = toJunctionPath(id)
+      if (fixedId !== id && fs.existsSync(fixedId)) {
+        return fs.readFileSync(fixedId, 'utf-8')
+      }
+      return null
+    }
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    hashPathFixPlugin(),
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable.png'],
-
-      // Manifest inline (also generates public/manifest.webmanifest)
-      manifest: {
-        name: 'Smart CNG Station',
-        short_name: 'Smart CNG',
-        description: 'Digital queue management system for CNG fuel stations',
-        theme_color: '#0E7C5B',
-        background_color: '#0E7C5B',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        id: '/',
-        start_url: '/',
-        lang: 'en',
-        categories: ['utilities', 'productivity'],
-        icons: [
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any'
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any'
-          },
-          {
-            src: '/icons/icon-maskable.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable'
-          }
-        ]
-      },
-
-      // Workbox configuration
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/offline\.html$/, /^\/_/, /\/[^/?]+\.[^/]+$/],
-        cleanupOutdatedCaches: true,
-        skipWaiting: true,
-        clientsClaim: true,
-
-        runtimeCaching: [
-          // Google Fonts — cache first
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: {
-                maxEntries: 20,
-                maxAgeSeconds: 60 * 60 * 24 * 365
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Firebase / Firestore API — network first, fall back to cache
-          {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'firestore-cache',
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 // 1 day
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          },
-          // Google Maps API — stale while revalidate
-          {
-            urlPattern: /^https:\/\/maps\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'google-maps-cache',
-              expiration: {
-                maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 1 week
-              }
-            }
-          }
-        ]
-      },
-
-      devOptions: {
-        enabled: false // disable in dev to avoid confusion
-      }
-    })
   ],
 
   server: {

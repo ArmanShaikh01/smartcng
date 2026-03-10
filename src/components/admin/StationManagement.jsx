@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
+import { toast } from '../../utils/toast';
+import { confirm } from '../../utils/confirm';
 import MapLocationPicker from './MapLocationPicker';
 import './StationManagement.css';
 
@@ -89,7 +91,7 @@ const StationManagement = () => {
                     query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', formData.stationId))
                 );
                 if (!dupCheck.empty) {
-                    alert(`Station ID "${formData.stationId}" already exists! Please use a unique ID.`);
+                    toast.warning(`Station ID "${formData.stationId}" already exists! Please use a unique ID.`);
                     setLoading(false);
                     return;
                 }
@@ -122,7 +124,7 @@ const StationManagement = () => {
                     ...stationData,
                     createdAt: editingStation.createdAt
                 });
-                alert('Station updated successfully!');
+                toast.success('Station updated successfully!');
             } else {
                 const stationRef = await addDoc(collection(db, COLLECTIONS.STATIONS), stationData);
 
@@ -138,14 +140,14 @@ const StationManagement = () => {
                     });
                 }
 
-                alert('Station created successfully!');
+                toast.success('Station created successfully!');
             }
 
             resetForm();
             fetchStations();
         } catch (error) {
             console.error('Error saving station:', error);
-            alert('Failed to save station: ' + error.message);
+            toast.error('Failed to save station: ' + error.message);
             setLoading(false);
         }
     };
@@ -231,7 +233,7 @@ const StationManagement = () => {
             } else {
                 console.error('❌ Geocoding failed:', data.status, data.error_message);
                 if (data.status === 'REQUEST_DENIED') {
-                    alert('⚠️ Geocoding API not enabled. Please enable it in Google Cloud Console or manually enter station details.');
+                    toast.warning('Geocoding API not enabled. Please enable it in Google Cloud Console or enter station details manually.');
                 }
             }
         } catch (error) {
@@ -241,20 +243,27 @@ const StationManagement = () => {
 
     const handleToggleSuspend = async (station) => {
         const isSuspended = station.isSuspended || false;
-        const action = isSuspended ? 'unsuspend' : 'suspend';
-        if (!confirm(`Are you sure you want to ${action} "${station.name}"?`)) {
-            return;
-        }
+        const ok = await confirm(
+            isSuspended
+                ? `Unsuspend "${station.name}"? It will become active again.`
+                : `Suspend "${station.name}"? Customers will not be able to book.`,
+            {
+                title: isSuspended ? 'Unsuspend Station' : 'Suspend Station',
+                confirmLabel: isSuspended ? 'Yes, Unsuspend' : 'Yes, Suspend',
+                variant: isSuspended ? 'primary' : 'warning',
+            }
+        );
+        if (!ok) return;
 
         try {
             await updateDoc(doc(db, COLLECTIONS.STATIONS, station.id), {
                 isSuspended: !isSuspended,
                 updatedAt: serverTimestamp()
             });
-            alert(`Station ${isSuspended ? 'unsuspended' : 'suspended'} successfully!`);
+            toast.success(`Station ${isSuspended ? 'unsuspended' : 'suspended'} successfully!`);
         } catch (error) {
             console.error('Error updating station:', error);
-            alert('Failed to update station: ' + error.message);
+            toast.error('Failed to update station: ' + error.message);
         }
     };
 

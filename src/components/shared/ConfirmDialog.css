@@ -1,0 +1,166 @@
+/* =============================================
+   SMART CNG — Themed Confirm Dialog
+   Brand: Emerald Green #0E7C5B | Orange #FF8C1A
+   ============================================= */
+
+/* Backdrop */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 28, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  animation: confirm-fade-in 0.18s ease both;
+}
+
+@keyframes confirm-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Dialog box */
+.confirm-dialog {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18), 0 4px 16px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 400px;
+  overflow: hidden;
+  animation: confirm-slide-up 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes confirm-slide-up {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+/* Icon strip at top */
+.confirm-icon-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem 1.5rem 0.75rem;
+}
+
+.confirm-icon-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.confirm-icon-circle.danger  { background: #fee2e2; }
+.confirm-icon-circle.warning { background: #fff8f0; }
+.confirm-icon-circle.primary { background: rgba(14, 124, 91, 0.1); }
+
+/* Body */
+.confirm-body {
+  padding: 0.25rem 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.confirm-title {
+  font-family: 'Poppins', sans-serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1F2937;
+  margin: 0 0 0.5rem;
+  line-height: 1.3;
+}
+
+.confirm-message {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Actions */
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  padding: 0 1.25rem 1.25rem;
+}
+
+.confirm-btn {
+  padding: 0.65rem 1rem;
+  border-radius: 9999px;
+  font-family: 'Poppins', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: all 0.18s ease;
+  min-height: 42px;
+}
+
+/* Cancel button — always ghost */
+.confirm-btn-cancel {
+  background: transparent;
+  color: #6b7280;
+  border-color: #e5e7eb;
+}
+.confirm-btn-cancel:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+/* Confirm — danger variant (red) */
+.confirm-btn-ok.danger {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+.confirm-btn-ok.danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  transform: translateY(-1px);
+}
+
+/* Confirm — warning variant (orange) */
+.confirm-btn-ok.warning {
+  background: #FF8C1A;
+  color: #fff;
+  border-color: #FF8C1A;
+  box-shadow: 0 4px 12px rgba(255, 140, 26, 0.3);
+}
+.confirm-btn-ok.warning:hover {
+  background: #e67a00;
+  border-color: #e67a00;
+  transform: translateY(-1px);
+}
+
+/* Confirm — primary variant (green, default) */
+.confirm-btn-ok.primary {
+  background: #0E7C5B;
+  color: #fff;
+  border-color: #0E7C5B;
+  box-shadow: 0 4px 12px rgba(14, 124, 91, 0.3);
+}
+.confirm-btn-ok.primary:hover {
+  background: #0b6449;
+  border-color: #0b6449;
+  transform: translateY(-1px);
+}
+
+/* Mobile */
+@media (max-width: 400px) {
+  .confirm-actions {
+    grid-template-columns: 1fr;
+  }
+  .confirm-btn-cancel { order: 2; }
+  .confirm-btn-ok     { order: 1; }
+}

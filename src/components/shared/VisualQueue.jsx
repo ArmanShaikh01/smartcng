@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtimeQueue } from '../../hooks/useRealtimeQueue';
 import { markNoShow } from '../../utils/operatorLogic';
+import { toast } from '../../utils/toast';
+import { confirm } from '../../utils/confirm';
 import VehicleCard from './VehicleCard';
 import Icon from './Icon';
 import './VisualQueue.css';
@@ -20,12 +22,17 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
     const [noShowLoading, setNoShowLoading] = useState(null); // bookingId being processed
 
     const handleNoShow = async (booking) => {
-        if (!confirm(`Mark ${booking.vehicleNumber} as No-Show and remove from queue?`)) return;
+        const ok = await confirm(`Mark ${booking.vehicleNumber} as No-Show? They will be removed from the queue.`, {
+            title: 'Mark as No-Show',
+            confirmLabel: 'Yes, Mark No-Show',
+            variant: 'warning',
+        });
+        if (!ok) return;
 
         setNoShowLoading(booking.id);
         const result = await markNoShow(booking.id, booking.vehicleNumber, stationId, user?.uid);
         if (!result.success) {
-            alert('Failed to mark no-show: ' + result.error);
+            toast.error('Failed to mark no-show: ' + result.error);
         }
         setNoShowLoading(null);
     };

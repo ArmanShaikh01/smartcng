@@ -53,19 +53,34 @@ export const toggleGasStatus = async (stationId, gasOn, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // ── Notification: owner alert when gas is turned OFF ──────────────────
+        // ── Notifications for gas status change ─────────────────────────────
+        const ownerData = stationSnapshot.docs[0].data();
         if (!gasOn) {
-            // Fetch ownerId from the station document
-            const ownerData = stationSnapshot.docs[0].data();
+            // Gas turned OFF → notify owner
             if (ownerData.ownerId) {
                 await createNotification(
                     ownerData.ownerId,
                     NOTIF_TYPE.GAS_TURNED_OFF,
-                    'Gas Supply Turned OFF',
+                    '⚠️ Gas Supply Turned OFF',
                     `Gas has been turned OFF at station ${stationId}. New bookings are blocked.`,
                     { stationId, operatorId }
                 );
             }
+        } else {
+            // Gas turned ON → notify owner + all operators at this station
+            const notifyTargets = [];
+            if (ownerData.ownerId) notifyTargets.push(ownerData.ownerId);
+            const operatorIds = ownerData.operatorIds || [];
+            operatorIds.forEach(uid => { if (uid !== operatorId) notifyTargets.push(uid); });
+            await Promise.all(notifyTargets.map(uid =>
+                createNotification(
+                    uid,
+                    NOTIF_TYPE.GAS_TURNED_ON,
+                    '✅ Gas Supply Restored',
+                    `Gas is back ON at station ${stationId}. Fueling operations resumed.`,
+                    { stationId, operatorId }
+                )
+            ));
         }
 
         return { success: true };
@@ -112,18 +127,34 @@ export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // ── Notification: owner alert when booking is disabled ──────────────
+        // ── Notifications for booking status change ──────────────────────────
+        const ownerData2 = stationSnapshot.docs[0].data();
         if (!bookingOn) {
-            const ownerData = stationSnapshot.docs[0].data();
-            if (ownerData.ownerId) {
+            // Booking closed → notify owner
+            if (ownerData2.ownerId) {
                 await createNotification(
-                    ownerData.ownerId,
+                    ownerData2.ownerId,
                     NOTIF_TYPE.STATION_BOOKING_OFF,
-                    'Booking Disabled at Station',
+                    '🚫 Booking Closed',
                     `Booking has been turned OFF at station ${stationId}. No new tokens will be issued.`,
                     { stationId, operatorId }
                 );
             }
+        } else {
+            // Booking opened → notify owner + all operators
+            const notifyTargets2 = [];
+            if (ownerData2.ownerId) notifyTargets2.push(ownerData2.ownerId);
+            const operatorIds2 = ownerData2.operatorIds || [];
+            operatorIds2.forEach(uid => { if (uid !== operatorId) notifyTargets2.push(uid); });
+            await Promise.all(notifyTargets2.map(uid =>
+                createNotification(
+                    uid,
+                    NOTIF_TYPE.STATION_BOOKING_ON,
+                    '✅ Booking Opened',
+                    `Booking is now OPEN at station ${stationId}. Customers can book tokens.`,
+                    { stationId, operatorId }
+                )
+            ));
         }
 
         return { success: true };
@@ -232,14 +263,14 @@ export const advanceQueue = async (stationId, operatorId) => {
 
         await batch.commit();
 
-        // ── Notifications after queue advance ─────────────────────────────
+        // ── Notifications after queue advance ─────────────────────────────────
         // 1. Notify completed customer
         const completedCustId = currentBooking.data().customerId;
         if (completedCustId) {
             await createNotification(
                 completedCustId,
                 NOTIF_TYPE.FUELING_COMPLETED,
-                'Fueling Completed',
+                '⛽ Fueling Completed!',
                 `Fueling for vehicle ${currentVehicleNumber} is complete. Thank you for using Smart CNG.`,
                 { stationId, vehicleNumber: currentVehicleNumber, bookingId: currentBookingId }
             );
@@ -252,10 +283,47 @@ export const advanceQueue = async (stationId, operatorId) => {
                 await createNotification(
                     nextBooking.customerId,
                     NOTIF_TYPE.TURN_ARRIVED,
-                    'Your Turn Has Arrived!',
+                    '🚨 Your Turn Has Arrived!',
                     `Vehicle ${nextBooking.vehicleNumber} is now at the pump. Please proceed for fueling.`,
                     { stationId, vehicleNumber: nextBooking.vehicleNumber, bookingId: nextBooking.id }
                 );
+            }
+        }
+
+        // 3. Notify customers newly promoted into eligible zone (positions 2–10)
+        //    so they know to head to the station and check-in
+        const newlyEligible = sorted.slice(1, 10); // positions 2–10 after the advance
+        await Promise.all(
+            newlyEligible
+                .filter(b => b.customerId && !b.isCheckedIn)
+                .map(b =>
+                    createNotification(
+                        b.customerId,
+                        NOTIF_TYPE.CHECK_IN_REMINDER,
+                        '📍 Proceed to Station — Check-in Required',
+                        `Your queue position is now #${b.queuePosition}. Please arrive at the station and check-in.`,
+                        { stationId, vehicleNumber: b.vehicleNumber, bookingId: b.id, queuePosition: b.queuePosition }
+                    )
+                )
+        );
+
+        // 4. Queue backlog alert to owner if queue > 15
+        const queueLen = sorted.length + 1; // +1 for the one just fueling
+        if (queueLen > 15) {
+            const stationDataSnap = await getDocs(
+                query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', stationId))
+            );
+            if (!stationDataSnap.empty) {
+                const stData = stationDataSnap.docs[0].data();
+                if (stData.ownerId) {
+                    await createNotification(
+                        stData.ownerId,
+                        NOTIF_TYPE.QUEUE_BACKLOG_ALERT,
+                        '🚨 Queue Backlog Alert',
+                        `Station ${stationId} has ${queueLen} vehicles in queue. Consider adding more operators.`,
+                        { stationId, queueLength: queueLen }
+                    );
+                }
             }
         }
 

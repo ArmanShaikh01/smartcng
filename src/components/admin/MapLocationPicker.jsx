@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { GoogleMap, useLoadScript, Marker } from '@react-google-maps/api';
 import { useGeolocation } from '../../hooks/useGeolocation';
+import { toast } from '../../utils/toast';
 import './MapLocationPicker.css';
 
 // CRITICAL: Define libraries outside component to prevent re-initialization
@@ -77,7 +78,7 @@ const MapLocationPicker = ({ latitude, longitude, onLocationSelect }) => {
             setMarkerPosition({ lat, lng });
             onLocationSelect(lat, lng);
         } catch (error) {
-            alert('Unable to get your current location. Please ensure location permission is granted.');
+            toast.warning('Unable to get your current location. Please ensure location permission is granted.');
         } finally {
             setLoadingCurrentLocation(false);
         }

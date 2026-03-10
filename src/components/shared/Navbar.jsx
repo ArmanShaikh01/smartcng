@@ -1,5 +1,6 @@
-// Enhanced Navbar - Desktop: horizontal nav | Mobile: slide-in drawer
+// Enhanced Navbar - Desktop: horizontal nav | Mobile: bottom nav bar (Portal)
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { signOut } from '../../firebase/auth';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -12,9 +13,10 @@ const Navbar = ({ title }) => {
     const { user, userProfile } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
-    const [drawerOpen, setDrawerOpen] = useState(false);
     const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-    const dropdownRef = useRef(null);
+    const dropdownRef = useRef(null); // kept for compat (unused now)
+    const desktopDropdownRef = useRef(null);
+    const mobileDropdownRef = useRef(null);
 
     // Live unread notification count
     const { unreadCount } = useNotifications(user?.uid ?? null);
@@ -30,7 +32,6 @@ const Navbar = ({ title }) => {
 
     const handleNavigate = (path) => {
         navigate(path);
-        setDrawerOpen(false);
         setUserDropdownOpen(false);
     };
 
@@ -39,7 +40,9 @@ const Navbar = ({ title }) => {
     // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+            const inDesktop = desktopDropdownRef.current?.contains(e.target);
+            const inMobile  = mobileDropdownRef.current?.contains(e.target);
+            if (!inDesktop && !inMobile) {
                 setUserDropdownOpen(false);
             }
         };
@@ -80,124 +83,127 @@ const Navbar = ({ title }) => {
     const avatarLetter = userProfile?.name?.charAt(0).toUpperCase() || '?';
 
     return (
-        <nav className="navbar">
-            <div className="navbar-container">
-                {/* Brand */}
-                <div className="navbar-brand" onClick={() => handleNavigate(menuItems[0]?.path || '/')}>
-                    <img
-                        src="/smartcng-logo.jpeg"
-                        alt="Smart CNG"
-                        className="brand-logo-img"
-                        onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-                    />
-                    <span className="brand-text" style={{display:'none'}}>Smart<span>CNG</span></span>
-                </div>
+        <>
+            {/* ══ TOP NAVBAR — visible on all screens ══ */}
+            <nav className="navbar">
+                <div className="navbar-container">
+                    {/* Brand */}
+                    <div className="navbar-brand" onClick={() => handleNavigate(menuItems[0]?.path || '/')}>
+                        <img
+                            src="/smartcng-logo.jpeg"
+                            alt="Smart CNG"
+                            className="brand-logo-img"
+                            onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                        />
+                        <span className="brand-text" style={{ display: 'none' }}>Smart<span>CNG</span></span>
+                    </div>
 
-                {user && (
-                    <>
-                        {/* ── DESKTOP NAV LINKS ── */}
-                        <div className="desktop-nav">
-                            {menuItems.map(item => (
-                                <button
-                                    key={item.path}
-                                    onClick={() => handleNavigate(item.path)}
-                                    className={`desktop-nav-link ${isActive(item.path) ? 'active' : ''}`}
-                                >
-                                    <span className="nav-link-icon"><Icon name={item.iconName} size={16} /></span>
-                                    <span>{item.label}</span>
-                                    {item.path === '/notifications' && unreadCount > 0 && (
-                                        <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* ── DESKTOP USER CHIP ── */}
-                        <div className="desktop-user-chip" ref={dropdownRef}>
-                            <button
-                                className="user-chip-btn"
-                                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                            >
-                                <div className="chip-avatar">{avatarLetter}</div>
-                                <div className="chip-info">
-                                    <span className="chip-name">{userProfile?.name || 'User'}</span>
-                                    {userProfile?.role && (
-                                        <span className="chip-role">{userProfile.role}</span>
-                                    )}
-                                </div>
-                                <span className={`chip-caret ${userDropdownOpen ? 'open' : ''}`}>▾</span>
-                            </button>
-
-                            {userDropdownOpen && (
-                                <div className="user-dropdown">
-                                    <div className="dropdown-info">
-                                        <span className="dropdown-phone">{user.phoneNumber}</span>
-                                    </div>
-                                    <button onClick={handleSignOut} className="dropdown-logout">
-                                        <Icon name="logOut" size={14} /> Logout
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* ── MOBILE HAMBURGER ── */}
-                        <button
-                            className="hamburger-btn"
-                            onClick={() => setDrawerOpen(!drawerOpen)}
-                            aria-label="Toggle menu"
-                        >
-                            <span className={`ham-line ${drawerOpen ? 'open' : ''}`}></span>
-                            <span className={`ham-line ${drawerOpen ? 'open' : ''}`}></span>
-                            <span className={`ham-line ${drawerOpen ? 'open' : ''}`}></span>
-                        </button>
-
-                        {/* ── MOBILE DRAWER ── */}
-                        <div className={`mobile-drawer ${drawerOpen ? 'open' : ''}`}>
-                            <div className="drawer-header">
-                                <div className="drawer-user-info">
-                                    <div className="drawer-avatar">{avatarLetter}</div>
-                                    <div className="drawer-details">
-                                        <span className="drawer-name">{userProfile?.name || 'User'}</span>
-                                        <span className="drawer-phone">{user.phoneNumber}</span>
-                                        {userProfile?.role && (
-                                            <span className="drawer-role-badge">{userProfile.role}</span>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="drawer-items">
+                    {user && (
+                        <>
+                            {/* ── DESKTOP NAV LINKS ── */}
+                            <div className="desktop-nav">
                                 {menuItems.map(item => (
                                     <button
                                         key={item.path}
                                         onClick={() => handleNavigate(item.path)}
-                                        className={`drawer-item ${isActive(item.path) ? 'active' : ''}`}
+                                        className={`desktop-nav-link ${isActive(item.path) ? 'active' : ''}`}
                                     >
-                                        <span className="drawer-item-icon"><Icon name={item.iconName} size={18} /></span>
-                                        <span className="drawer-item-label">{item.label}</span>
+                                        <span className="nav-link-icon"><Icon name={item.iconName} size={16} /></span>
+                                        <span>{item.label}</span>
                                         {item.path === '/notifications' && unreadCount > 0 && (
-                                            <span className="nav-badge nav-badge--drawer">{unreadCount > 99 ? '99+' : unreadCount}</span>
+                                            <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
                                         )}
-                                        {isActive(item.path) && <span className="drawer-active-dot"></span>}
                                     </button>
                                 ))}
                             </div>
 
-                            <div className="drawer-footer">
-                                <button onClick={handleSignOut} className="drawer-logout-btn">
-                                    <Icon name="logOut" size={16} /> Logout
+                            {/* ── DESKTOP USER CHIP ── */}
+                            <div className="desktop-user-chip" ref={desktopDropdownRef}>
+                                <button
+                                    className="user-chip-btn"
+                                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                                >
+                                    <div className="chip-avatar">{avatarLetter}</div>
+                                    <div className="chip-info">
+                                        <span className="chip-name">{userProfile?.name || 'User'}</span>
+                                        {userProfile?.role && (
+                                            <span className="chip-role">{userProfile.role}</span>
+                                        )}
+                                    </div>
+                                    <span className={`chip-caret ${userDropdownOpen ? 'open' : ''}`}>▾</span>
                                 </button>
-                            </div>
-                        </div>
 
-                        {/* Overlay for drawer */}
-                        {drawerOpen && (
-                            <div className="drawer-overlay" onClick={() => setDrawerOpen(false)} />
-                        )}
-                    </>
-                )}
-            </div>
-        </nav>
+                                {userDropdownOpen && (
+                                    <div className="user-dropdown">
+                                        <div className="dropdown-info">
+                                            <span className="dropdown-phone">{user.phoneNumber}</span>
+                                        </div>
+                                        <button onClick={handleSignOut} className="dropdown-logout">
+                                            <Icon name="logOut" size={14} /> Logout
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* ── MOBILE USER AVATAR (right side of top bar) ── */}
+                            <div className="mobile-user-avatar-wrap" ref={mobileDropdownRef}>
+                                <button
+                                    className="mobile-avatar-btn"
+                                    onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                                    aria-label="Account menu"
+                                >
+                                    <span className="mobile-avatar-letter">{avatarLetter}</span>
+                                </button>
+
+                                {userDropdownOpen && (
+                                    <div className="mobile-user-dropdown">
+                                        <div className="mob-drop-user">
+                                            <div className="mob-drop-avatar">{avatarLetter}</div>
+                                            <div className="mob-drop-info">
+                                                <span className="mob-drop-name">{userProfile?.name || 'User'}</span>
+                                                <span className="mob-drop-role">{userProfile?.role}</span>
+                                                <span className="mob-drop-phone">{user.phoneNumber}</span>
+                                            </div>
+                                        </div>
+                                        <button onClick={handleSignOut} className="mob-drop-logout">
+                                            <Icon name="logOut" size={15} /> Logout
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            </nav>
+
+            {/* ══ MOBILE BOTTOM NAV BAR ══
+                Rendered via Portal directly into document.body so no ancestor
+                CSS (transform / animation / overflow) can break position:fixed */}
+            {user && createPortal(
+                <nav className="bottom-nav" aria-label="Mobile bottom navigation">
+                    {menuItems.map(item => (
+                        <button
+                            key={item.path}
+                            type="button"
+                            onClick={() => handleNavigate(item.path)}
+                            className={`bottom-nav-item ${isActive(item.path) ? 'active' : ''}`}
+                            aria-label={item.label}
+                        >
+                            <span className="bottom-nav-icon">
+                                <Icon name={item.iconName} size={22} />
+                                {item.path === '/notifications' && unreadCount > 0 && (
+                                    <span className="bottom-nav-badge">
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </span>
+                            <span className="bottom-nav-label">{item.label}</span>
+                        </button>
+                    ))}
+                </nav>,
+                document.body
+            )}
+        </>
     );
 };
 

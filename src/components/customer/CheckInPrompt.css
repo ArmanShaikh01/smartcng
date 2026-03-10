@@ -1,33 +1,18 @@
-/* Check-in Prompt Styles */
+/* Check-in Prompt Styles — inline card (no overlay) */
 .checkin-prompt {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.8);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--spacing-xl);
-    z-index: 9999;
+    margin: 12px 0;
     animation: fadeIn 0.3s ease-in-out;
-    pointer-events: none;
-    /* Allow clicks to pass through overlay background */
 }
 
 .checkin-card {
-    background-color: var(--bg-primary);
-    border-radius: var(--radius-xl);
-    padding: var(--spacing-2xl);
-    max-width: 500px;
-    width: 100%;
+    background: linear-gradient(135deg, #fff8ec, #fff);
+    border: 2px solid #f59e0b;
+    border-radius: 16px;
+    padding: 20px;
     text-align: center;
-    box-shadow: var(--shadow-xl);
+    box-shadow: 0 4px 16px rgba(245,158,11,0.12);
     animation: slideUp 0.3s ease-out;
     position: relative;
-    z-index: 10000;
-    pointer-events: auto;
 }
 
 @keyframes slideUp {
@@ -64,26 +49,35 @@
 .checkin-info {
     background-color: var(--bg-secondary);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
-    margin-bottom: var(--spacing-xl);
+    padding: 12px 14px;
+    margin-bottom: 14px;
 }
 
 .info-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--spacing-sm) 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.05);
 }
+.info-item:last-child { border-bottom: none; }
 
 .info-label {
-    font-size: var(--text-sm);
+    font-size: 0.78rem;
     color: var(--text-secondary);
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .info-value {
-    font-size: var(--text-base);
-    font-weight: 600;
+    font-size: 0.88rem;
+    font-weight: 700;
     color: var(--text-primary);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
 }
 
 .btn-large {
@@ -129,5 +123,39 @@
 
     .checkin-card h3 {
         font-size: var(--text-xl);
+    }
+
+    /* Fix info-item to stack vertically on mobile */
+    .info-item {
+        grid-template-columns: 1fr; /* Stack items vertically */
+        gap: 2px; /* Adjust gap for vertical stacking */
+        align-items: start; /* Align items to start */
+    }
+    .info-label,
+    .info-value {
+        text-align: left; /* Ensure text is left-aligned when stacked */
+        white-space: normal; /* Allow text to wrap when stacked */
+    }
+}
+
+/* Mobile responsive - compact sizing */
+@media (max-width: 480px) {
+    .checkin-card {
+        padding: 16px 14px;
+    }
+    .checkin-icon {
+        font-size: 2.2rem;
+        margin-bottom: 8px;
+    }
+    .checkin-card h3 {
+        font-size: 1.05rem;
+    }
+    .checkin-message {
+        font-size: 0.82rem;
+        margin-bottom: 10px;
+    }
+    .btn-large {
+        padding: 12px 16px;
+        font-size: 0.95rem;
     }
 }

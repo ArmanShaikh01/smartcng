@@ -45,6 +45,35 @@
     margin: 0;
 }
 
+/* ── Main Tab Switcher (Bookings / Complaints) ── */
+.history-main-tabs {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    background: var(--color-neutral-100, #f3f4f6);
+    border-radius: 12px;
+    padding: 4px;
+}
+
+.hmtab {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: transparent;
+    color: var(--color-neutral-500, #6b7280);
+    transition: all 0.2s;
+}
+
+.hmtab--active {
+    background: #fff;
+    color: var(--color-primary-600, #0E7C5B);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
 /* ── Filter Buttons ── */
 .history-filters {
     display: flex;

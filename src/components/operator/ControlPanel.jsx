@@ -1,6 +1,8 @@
 // Control Panel Component - GAS/BOOKING/NEXT buttons
 import { useState } from 'react';
 import { toggleGasStatus, toggleBookingStatus, advanceQueue } from '../../utils/operatorLogic';
+import { toast } from '../../utils/toast';
+import { confirm } from '../../utils/confirm';
 import Icon from '../shared/Icon';
 import './ControlPanel.css';
 
@@ -12,7 +14,7 @@ const ControlPanel = ({ station, operatorId, onQueueAdvanced }) => {
         setActionLoading('gas');
         setLoading(true);
         const result = await toggleGasStatus(station.stationId, !station.gasOn, operatorId);
-        if (!result.success) alert('Failed to toggle gas status: ' + result.error);
+        if (!result.success) toast.error('Failed to toggle gas status: ' + result.error);
         setLoading(false);
         setActionLoading(null);
     };
@@ -21,20 +23,25 @@ const ControlPanel = ({ station, operatorId, onQueueAdvanced }) => {
         setActionLoading('booking');
         setLoading(true);
         const result = await toggleBookingStatus(station.stationId, !station.bookingOn, operatorId);
-        if (!result.success) alert('Failed to toggle booking status: ' + result.error);
+        if (!result.success) toast.error('Failed to toggle booking status: ' + result.error);
         setLoading(false);
         setActionLoading(null);
     };
 
     const handleNext = async () => {
-        if (!confirm('Mark current vehicle as completed and advance queue?')) return;
+        const ok = await confirm('Mark the current vehicle as completed and move to the next in queue?', {
+            title: 'Advance Queue',
+            confirmLabel: 'Yes, Advance',
+            variant: 'primary',
+        });
+        if (!ok) return;
         setActionLoading('next');
         setLoading(true);
         const result = await advanceQueue(station.stationId, operatorId);
         if (result.success) {
             if (onQueueAdvanced) onQueueAdvanced(result);
         } else {
-            alert('Failed to advance queue: ' + result.error);
+            toast.error('Failed to advance queue: ' + result.error);
         }
         setLoading(false);
         setActionLoading(null);

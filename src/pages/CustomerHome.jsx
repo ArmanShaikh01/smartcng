@@ -1,6 +1,7 @@
 // Customer Home - Main customer interface
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useLocation } from 'react-router-dom';
 import { getActiveBooking } from '../utils/queueLogic';
 import Navbar from '../components/shared/Navbar';
 import VehicleSelection from '../components/customer/VehicleSelection';
@@ -11,14 +12,23 @@ import './CustomerHome.css';
 
 const CustomerHome = () => {
     const { user } = useAuth();
+    const location = useLocation();
     const [currentStep, setCurrentStep] = useState('loading'); // loading, station, vehicle, confirm, booking
     const [selectedVehicle, setSelectedVehicle] = useState(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [activeBooking, setActiveBooking] = useState(null);
 
+    // Re-run every time the user navigates TO this page (location changes)
+    // This prevents stale state when React Router reuses the mounted component
     useEffect(() => {
+        // Always reset to loading first — prevents blank content flash
+        setCurrentStep('loading');
+        setSelectedVehicle(null);
+        setSelectedStation(null);
+        setActiveBooking(null);
         checkActiveBooking();
-    }, [user]);
+    }, [user, location.key]); // location.key changes on every navigation
+
 
     const checkActiveBooking = async () => {
         if (!user) return;

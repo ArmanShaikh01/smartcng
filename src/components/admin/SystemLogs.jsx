@@ -142,16 +142,16 @@ const SystemLogs = () => {
                         <tbody>
                             {filteredLogs.map(log => (
                                 <tr key={log.id}>
-                                    <td className="log-time">{formatTimestamp(log.timestamp)}</td>
-                                    <td>
+                                    <td data-label="Time" className="log-time">{formatTimestamp(log.timestamp)}</td>
+                                    <td data-label="Action">
                                         <span className={`log-action ${getActionColor(log.action)}`}>
                                             {getActionIcon(log.action)} {log.action.replace(/_/g, ' ')}
                                         </span>
                                     </td>
-                                    <td>{log.stationId || 'N/A'}</td>
-                                    <td>{log.vehicleNumber || '-'}</td>
-                                    <td className="log-user">{log.performedBy?.substring(0, 8)}...</td>
-                                    <td>
+                                    <td data-label="Station">{log.stationId || 'N/A'}</td>
+                                    <td data-label="Vehicle">{log.vehicleNumber || '-'}</td>
+                                    <td data-label="By" className="log-user">{log.performedBy?.substring(0, 8)}...</td>
+                                    <td data-label="Role">
                                         <span className="role-badge">{log.performedByRole}</span>
                                     </td>
                                 </tr>

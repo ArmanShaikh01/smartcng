@@ -1,8 +1,9 @@
 // Authentication context and hook
 import { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { getDocument, COLLECTIONS } from '../firebase/firestore';
+import { toast } from '../utils/toast';
 
 const AuthContext = createContext();
 
@@ -18,13 +19,17 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [userRole, setUserRole] = useState(null);
     const [userProfile, setUserProfile] = useState(null);
-    // loading = true means "auth + Firestore profile fetch is still in progress"
-    // We only set it to false AFTER the full profile resolution is done.
     const [loading, setLoading] = useState(true);
-    // profileResolved tracks whether we completed the Firestore lookup for the
-    // currently signed-in user. Login.jsx checks this to avoid the race condition
-    // where user is set but role is still null (Firestore not fetched yet).
     const [profileResolved, setProfileResolved] = useState(false);
+    const [isBanned, setIsBanned] = useState(false);
+    // ref to cleanup real-time ban watcher
+    const banWatcherRef = useRef(null);
+
+    // Helper: sign out a banned user
+    const handleBannedUser = async () => {
+        toast.error('Your account has been blocked by the admin. Contact support for help.');
+        setTimeout(() => firebaseSignOut(auth), 2000);
+    };
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -40,6 +45,14 @@ export const AuthProvider = ({ children }) => {
 
                     if (userDoc.exists()) {
                         const profile = userDoc.data();
+
+                        // ── BAN CHECK ──
+                        if (profile.isBanned === true) {
+                            await handleBannedUser();
+                            setLoading(false);
+                            setProfileResolved(true);
+                            return;
+                        }
 
                         // If UID doc says 'customer', check if there's a phone-based higher-privilege doc
                         if (profile.role === 'customer' && firebaseUser.phoneNumber) {
@@ -61,13 +74,21 @@ export const AuthProvider = ({ children }) => {
                                 const privilegedProfile = privilegedDoc.data();
                                 const { doc } = await import('firebase/firestore');
 
-                                // Migrate privileged doc to UID-keyed, delete stale customer + old docs
+                                // Migrate privileged doc to UID-keyed doc
                                 const newDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
                                 await setDoc(newDocRef, { ...privilegedProfile, userId: firebaseUser.uid, phoneNumber: firebaseUser.phoneNumber });
-                                await deleteDoc(privilegedDoc.ref); // delete old phone-keyed doc
 
+                                // Set role BEFORE deleting old doc — delete failure must not abort login
                                 setUserProfile({ ...privilegedProfile, userId: firebaseUser.uid });
                                 setUserRole(privilegedProfile.role);
+
+                                // Best-effort cleanup of stale phone-keyed doc
+                                try {
+                                    await deleteDoc(privilegedDoc.ref);
+                                } catch (delErr) {
+                                    console.warn('[useAuth] Could not delete legacy doc (non-fatal):', delErr.code);
+                                }
+
                                 setProfileResolved(true);
                                 setLoading(false);
                                 return;
@@ -93,17 +114,33 @@ export const AuthProvider = ({ children }) => {
                             const profile = snap.docs[0].data();
 
                             // Migrate doc to UID-based ID so fast path works on next login
-                            const { doc } = await import('firebase/firestore');
+                            const { doc, onSnapshot: onSnap } = await import('firebase/firestore');
                             const newDocRef = doc(db, COLLECTIONS.USERS, firebaseUser.uid);
                             await setDoc(newDocRef, { ...profile, userId: firebaseUser.uid });
 
-                            // Delete old doc only if it had a different ID
-                            if (oldDocRef.id !== firebaseUser.uid) {
-                                await deleteDoc(oldDocRef);
-                            }
-
+                            // Set role BEFORE deleting — delete failure must never abort login
                             setUserProfile({ ...profile, userId: firebaseUser.uid });
                             setUserRole(profile.role);
+
+                            // Real-time ban watcher
+                            if (banWatcherRef.current) banWatcherRef.current();
+                            banWatcherRef.current = onSnap(
+                                doc(db, COLLECTIONS.USERS, firebaseUser.uid),
+                                (snap) => {
+                                    if (snap.exists() && snap.data().isBanned === true) {
+                                        handleBannedUser();
+                                    }
+                                }
+                            );
+
+                            // Best-effort cleanup: delete old phone-keyed doc
+                            try {
+                                if (oldDocRef.id !== firebaseUser.uid) {
+                                    await deleteDoc(oldDocRef);
+                                }
+                            } catch (delErr) {
+                                console.warn('[useAuth] Could not delete legacy doc (non-fatal):', delErr.code);
+                            }
                         } else {
                             // Genuinely new user — needs to complete registration
                             setUserProfile(null);
@@ -119,6 +156,8 @@ export const AuthProvider = ({ children }) => {
                 setUser(null);
                 setUserRole(null);
                 setUserProfile(null);
+                setIsBanned(false);
+                if (banWatcherRef.current) { banWatcherRef.current(); banWatcherRef.current = null; }
             }
             // Always mark profile as resolved and loading as done here
             setProfileResolved(true);
@@ -135,9 +174,10 @@ export const AuthProvider = ({ children }) => {
         userProfile,
         loading,
         profileResolved,
+        isBanned,
         setUserProfile,
         setUserRole
-    }), [user, userRole, userProfile, loading, profileResolved]);
+    }), [user, userRole, userProfile, loading, profileResolved, isBanned]);
 
     return (
         <AuthContext.Provider value={value}>

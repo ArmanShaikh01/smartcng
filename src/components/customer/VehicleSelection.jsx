@@ -4,6 +4,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
 import { useAuth } from '../../hooks/useAuth';
+import { validateVehicleNumber } from '../../utils/validators';
 import './VehicleSelection.css';
 
 const VehicleSelection = ({ onVehicleSelected }) => {
@@ -26,14 +27,14 @@ const VehicleSelection = ({ onVehicleSelected }) => {
         setLoading(true);
 
         try {
-            // Validate vehicle number format
-            const cleanVehicle = vehicleNumber.toUpperCase().replace(/\s/g, '');
-
-            if (cleanVehicle.length < 6) {
-                setError('Please enter a valid vehicle number');
+            // Validate Indian vehicle number format
+            const result = validateVehicleNumber(vehicleNumber);
+            if (!result.valid) {
+                setError(result.error);
                 setLoading(false);
                 return;
             }
+            const cleanVehicle = result.clean;
 
             const userRef = doc(db, COLLECTIONS.USERS, user.uid);
             const updatedVehicles = [...(userProfile.vehicles || []), cleanVehicle];
@@ -124,13 +125,14 @@ const VehicleSelection = ({ onVehicleSelected }) => {
                                 className="input"
                                 placeholder="MH12AB1234"
                                 value={vehicleNumber}
-                                onChange={(e) => setVehicleNumber(e.target.value)}
+                                onChange={(e) => setVehicleNumber(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
                                 required
                                 disabled={loading}
                                 autoFocus
+                                style={{ fontFamily: 'monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}
                             />
                             <small className="form-hint">
-                                Enter your vehicle registration number
+                                Format: MH12AB1234 — State · RTO · Series · Number
                             </small>
                         </div>
 

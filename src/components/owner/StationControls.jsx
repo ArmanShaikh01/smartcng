@@ -1,6 +1,9 @@
 // Station Controls Component - Owner controls for gas and booking
 import { useState } from 'react';
 import { toggleGasStatus, toggleBookingStatus } from '../../utils/operatorLogic';
+import { logAuditAction, AUDIT_ACTION } from '../../utils/auditLog';
+import { toast } from '../../utils/toast';
+import { confirm } from '../../utils/confirm';
 import Icon from '../shared/Icon';
 import './StationControls.css';
 
@@ -10,17 +13,28 @@ const StationControls = ({ station, ownerId }) => {
 
     const handleToggleGas = async () => {
         const action = station.gasOn ? 'turn OFF' : 'turn ON';
-        if (!confirm(`Are you sure you want to ${action} gas?`)) {
-            return;
-        }
+        const ok = await confirm(`Are you sure you want to ${action} gas?`, {
+            title: station.gasOn ? 'Turn Off Gas' : 'Turn On Gas',
+            confirmLabel: station.gasOn ? 'Yes, Turn OFF' : 'Yes, Turn ON',
+            variant: station.gasOn ? 'danger' : 'primary',
+        });
+        if (!ok) return;
 
         setActionLoading('gas');
         setLoading(true);
 
-        const result = await toggleGasStatus(station.stationId, !station.gasOn, ownerId);
+        const newVal = !station.gasOn;
+        const result = await toggleGasStatus(station.stationId, newVal, ownerId);
 
-        if (!result.success) {
-            alert('Failed to toggle gas status: ' + result.error);
+        if (result.success) {
+            await logAuditAction({
+                userId: ownerId, role: 'owner',
+                stationId: station.stationId,
+                actionType: newVal ? AUDIT_ACTION.GAS_ON : AUDIT_ACTION.GAS_OFF,
+                description: `Gas turned ${newVal ? 'ON' : 'OFF'} at ${station.name}`
+            });
+        } else {
+            toast.error('Failed to toggle gas status: ' + result.error);
         }
 
         setLoading(false);
@@ -29,17 +43,28 @@ const StationControls = ({ station, ownerId }) => {
 
     const handleToggleBooking = async () => {
         const action = station.bookingOn ? 'close' : 'open';
-        if (!confirm(`Are you sure you want to ${action} booking?`)) {
-            return;
-        }
+        const ok = await confirm(`Are you sure you want to ${action} booking?`, {
+            title: station.bookingOn ? 'Close Booking' : 'Open Booking',
+            confirmLabel: station.bookingOn ? 'Yes, Close' : 'Yes, Open',
+            variant: station.bookingOn ? 'warning' : 'primary',
+        });
+        if (!ok) return;
 
         setActionLoading('booking');
         setLoading(true);
 
-        const result = await toggleBookingStatus(station.stationId, !station.bookingOn, ownerId);
+        const newVal = !station.bookingOn;
+        const result = await toggleBookingStatus(station.stationId, newVal, ownerId);
 
-        if (!result.success) {
-            alert('Failed to toggle booking status: ' + result.error);
+        if (result.success) {
+            await logAuditAction({
+                userId: ownerId, role: 'owner',
+                stationId: station.stationId,
+                actionType: newVal ? AUDIT_ACTION.BOOKING_OPEN : AUDIT_ACTION.BOOKING_CLOSE,
+                description: `Booking ${newVal ? 'opened' : 'closed'} at ${station.name}`
+            });
+        } else {
+            toast.error('Failed to toggle booking status: ' + result.error);
         }
 
         setLoading(false);

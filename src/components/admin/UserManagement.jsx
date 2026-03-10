@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
+import { toast } from '../../utils/toast';
+import { confirm } from '../../utils/confirm';
+import { validatePhone10, onlyDigits10 } from '../../utils/validators';
 import './UserManagement.css';
 
 const UserManagement = () => {
@@ -51,11 +54,19 @@ const UserManagement = () => {
         e.preventDefault();
         setLoading(true);
 
+        // Validate phone number
+        const phoneResult = validatePhone10(formData.phoneNumber);
+        if (!phoneResult.valid) {
+            toast.warning(phoneResult.error);
+            setLoading(false);
+            return;
+        }
+
         try {
             // Create user document with auto-generated ID
             const newUser = {
                 userId: `${formData.role}_${Date.now()}`,
-                phoneNumber: formData.phoneNumber,
+                phoneNumber: phoneResult.normalized,
                 name: formData.name,
                 role: formData.role,
                 stationId: formData.role === 'admin' ? null : formData.stationId,
@@ -68,27 +79,55 @@ const UserManagement = () => {
 
             await addDoc(collection(db, COLLECTIONS.USERS), newUser);
 
-            alert(`${formData.role} created successfully! They can login with phone: ${formData.phoneNumber}`);
+            toast.success(`${formData.role} created! They can login with: ${phoneResult.normalized}`);
             setShowForm(false);
             setFormData({ phoneNumber: '', name: '', role: 'operator', stationId: '' });
             fetchUsers();
         } catch (error) {
             console.error('Error creating user:', error);
-            alert('Failed to create user');
+            toast.error('Failed to create user');
             setLoading(false);
         }
     };
 
+    const handleBlock = async (user) => {
+        const isBlocked = user.isBanned === true;
+        const action = isBlocked ? 'unblock' : 'block';
+        const ok = await confirm(`${isBlocked ? 'Unblock' : 'Block'} "${user.name || user.phoneNumber}"?`, {
+            title: isBlocked ? 'Unblock User' : 'Block User',
+            confirmLabel: isBlocked ? 'Yes, Unblock' : 'Yes, Block',
+            variant: isBlocked ? 'primary' : 'warning',
+        });
+        if (!ok) return;
+
+        try {
+            await updateDoc(doc(db, COLLECTIONS.USERS, user.id), {
+                isBanned: !isBlocked,
+                bannedUntil: null,
+                updatedAt: new Date()
+            });
+            // onSnapshot listener will auto-refresh the list
+        } catch (error) {
+            console.error(`Error trying to ${action} user:`, error);
+            toast.error(`Failed to ${action} user: ` + error.message);
+        }
+    };
+
     const handleDelete = async (userId) => {
-        if (!confirm('Are you sure you want to delete this user?')) return;
+        const ok = await confirm('This user will be permanently deleted from the system.', {
+            title: 'Delete User',
+            confirmLabel: 'Yes, Delete',
+            variant: 'danger',
+        });
+        if (!ok) return;
 
         try {
             await deleteDoc(doc(db, COLLECTIONS.USERS, userId));
-            alert('User deleted successfully');
+            toast.success('User deleted successfully');
             fetchUsers();
         } catch (error) {
             console.error('Error deleting user:', error);
-            alert('Failed to delete user');
+            toast.error('Failed to delete user');
         }
     };
 
@@ -123,15 +162,20 @@ const UserManagement = () => {
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
                             <label>Phone Number *</label>
-                            <input
-                                type="tel"
-                                className="input"
-                                placeholder="+91 9876543210"
-                                value={formData.phoneNumber}
-                                onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                                required
-                            />
-                            <small>Include country code (e.g., +91)</small>
+                            <div className="phone-input-wrapper">
+                                <span className="phone-prefix">+91</span>
+                                <input
+                                    type="tel"
+                                    className="input"
+                                    placeholder="9876543210"
+                                    value={formData.phoneNumber}
+                                    onChange={(e) => setFormData({ ...formData, phoneNumber: onlyDigits10(e.target.value) })}
+                                    required
+                                    maxLength={10}
+                                    inputMode="numeric"
+                                />
+                            </div>
+                            <small>Enter 10-digit mobile number (without +91)</small>
                         </div>
 
                         <div className="form-group">
@@ -205,26 +249,40 @@ const UserManagement = () => {
                             </thead>
                             <tbody>
                                 {users.map(user => (
-                                    <tr key={user.id}>
-                                        <td>{user.name}</td>
-                                        <td>{user.phoneNumber}</td>
-                                        <td>
+                                    <tr
+                                        key={user.id}
+                                        className={user.isBanned ? 'um-row-blocked' : ''}
+                                    >
+                                        <td data-label="Name">
+                                            {user.name}
+                                            {user.isBanned && (
+                                                <span className="um-banned-badge">Blocked</span>
+                                            )}
+                                        </td>
+                                        <td data-label="Phone">{user.phoneNumber}</td>
+                                        <td data-label="Role">
                                             <span className={`role-badge ${getRoleBadgeClass(user.role)}`}>
                                                 {user.role}
                                             </span>
                                         </td>
-                                        <td>{user.stationId || 'N/A'}</td>
-                                        <td>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDelete(user.id);
-                                                }}
-                                                className="btn-delete"
-                                            >
-                                                Delete
-                                            </button>
+                                        <td data-label="Station">{user.stationId || 'N/A'}</td>
+                                        <td data-label="Action">
+                                            <div className="um-action-btns">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleBlock(user); }}
+                                                    className={user.isBanned ? 'btn-unblock' : 'btn-block'}
+                                                >
+                                                    {user.isBanned ? 'Unblock' : 'Block'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleDelete(user.id); }}
+                                                    className="btn-delete"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}

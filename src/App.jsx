@@ -2,6 +2,8 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
+import ToastProvider from './components/shared/Toast';
+import ConfirmDialogProvider from './components/shared/ConfirmDialog';
 
 // Lazy-loaded pages — reduces initial bundle size
 const Login = lazy(() => import('./pages/Login'));
@@ -179,6 +181,8 @@ function App() {
       <Router>
         {/* reCAPTCHA widget is managed by auth.js directly on document.body */}
         <AppRoutes />
+        <ToastProvider />
+        <ConfirmDialogProvider />
       </Router>
     </AuthProvider>
   );

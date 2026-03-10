@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fix": "cd /d D:\\SmartCNG && vite",
     "build": "vite build",
+    "build:fix": "cd /d D:\\SmartCNG && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

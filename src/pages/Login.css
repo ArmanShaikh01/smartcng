@@ -415,6 +415,28 @@
     border-bottom: 1px solid var(--color-neutral-100);
 }
 
+/* OTP step — privacy consent line */
+.login-consent {
+    text-align: center;
+    font-size: var(--text-xs);
+    color: var(--color-neutral-400);
+    margin: var(--space-3) 0 0;
+    line-height: 1.5;
+}
+
+.login-consent-link {
+    color: var(--color-primary-600);
+    font-weight: var(--font-semibold);
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.login-consent-link:hover {
+    color: var(--color-primary-700);
+    border-bottom-color: var(--color-primary-400);
+}
+
 /* ============================================
    DESKTOP SPLIT PANEL
    ============================================ */

@@ -7,8 +7,10 @@
     <link rel="icon" type="image/png" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-    <!-- Viewport — no zoom, safe-area insets for notch/home-bar devices -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- Viewport — safe-area insets for notch/home-bar devices -->
+    <!-- NOTE: user-scalable=no and maximum-scale=1.0 removed — they can suppress
+         mouse-wheel scroll events in Chromium-based browsers -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- PWA / Theme -->
     <meta name="theme-color" content="#0E7C5B" />

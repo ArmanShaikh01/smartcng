@@ -23,7 +23,10 @@ export const COLLECTIONS = {
     STATIONS: 'stations',
     BOOKINGS: 'bookings',
     QUEUE_LOGS: 'queue_logs',
-    NOTIFICATIONS: 'notifications'
+    NOTIFICATIONS: 'notifications',
+    RATINGS: 'ratings',
+    COMPLAINTS: 'complaints',
+    AUDIT_LOGS: 'audit_logs'
 };
 
 /**

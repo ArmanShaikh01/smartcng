@@ -6,6 +6,7 @@ import { COLLECTIONS } from '../firebase/firestore';
 import { setDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../hooks/useAuth';
+import { validateVehicleNumber, onlyDigits10 } from '../utils/validators';
 import './Login.css';
 
 const Login = () => {
@@ -77,15 +78,10 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            let formattedPhone = phoneNumber.trim();
-            if (!formattedPhone.startsWith('+')) {
-                formattedPhone = formattedPhone.replace(/^0+/, '');
-                formattedPhone = '+91' + formattedPhone;
-            }
+            let formattedPhone = '+91' + phoneNumber.trim();
 
-            const digitsOnly = formattedPhone.replace(/\D/g, '');
-            if (digitsOnly.length < 10) {
-                setError('Please enter a valid 10-digit phone number');
+            if (phoneNumber.trim().length !== 10) {
+                setError('Please enter a valid 10-digit mobile number');
                 setFormLoading(false);
                 return;
             }
@@ -141,6 +137,14 @@ const Login = () => {
         setError('');
         setFormLoading(true);
 
+        // Validate vehicle number format
+        const vehicleResult = validateVehicleNumber(signupData.vehicleNumber);
+        if (!vehicleResult.valid) {
+            setError(vehicleResult.error);
+            setFormLoading(false);
+            return;
+        }
+
         try {
             // user is already authenticated at this point (verifyOTP succeeded in prev step)
             // DO NOT call verifyOTP again — confirmationResult is already consumed
@@ -153,8 +157,8 @@ const Login = () => {
                 name: signupData.name,
                 role: 'customer',
                 stationId: null,
-                defaultVehicle: signupData.vehicleNumber.toUpperCase(),
-                vehicles: [signupData.vehicleNumber.toUpperCase()],
+                defaultVehicle: vehicleResult.clean,
+                vehicles: [vehicleResult.clean],
                 // Note: isBanned, bannedUntil, noShowCount are intentionally
                 // omitted — Firestore rules block customers from setting them.
                 // Admin sets these fields later if needed.
@@ -181,11 +185,7 @@ const Login = () => {
         setFormLoading(true);
 
         try {
-            let formattedPhone = phoneNumber.trim();
-            if (!formattedPhone.startsWith('+')) {
-                formattedPhone = formattedPhone.replace(/^0+/, '');
-                formattedPhone = '+91' + formattedPhone;
-            }
+            let formattedPhone = '+91' + phoneNumber.trim();
 
             const result = await sendOTP(formattedPhone);
             setConfirmationResult(result);
@@ -274,11 +274,11 @@ const Login = () => {
                                         className="input"
                                         placeholder="9876543210"
                                         value={phoneNumber}
-                                        onChange={(e) => {
-                                            setPhoneNumber(e.target.value);
-                                        }}
+                                        onChange={(e) => setPhoneNumber(onlyDigits10(e.target.value))}
+                                        maxLength={10}
                                         required
                                         disabled={formLoading}
+                                        inputMode="numeric"
                                     />
                                 </div>
                                 <small className="form-hint">
@@ -346,6 +346,19 @@ const Login = () => {
                                     ← Change Number
                                 </button>
                             </div>
+
+                            {/* Privacy policy consent */}
+                            <p className="login-consent">
+                                By verifying, you agree to our{' '}
+                                <a
+                                    href="/privacy-policy"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="login-consent-link"
+                                >
+                                    Privacy Policy
+                                </a>
+                            </p>
                         </form>
 
                     ) : (
@@ -377,13 +390,14 @@ const Login = () => {
                                     className="input"
                                     placeholder="MH12AB1234"
                                     value={signupData.vehicleNumber}
-                                    onChange={(e) => setSignupData({ ...signupData, vehicleNumber: e.target.value.toUpperCase() })}
+                                    onChange={(e) => setSignupData({ ...signupData, vehicleNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) })}
                                     required
                                     disabled={loading}
-                                    style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                                    maxLength={10}
+                                    style={{ fontFamily: 'monospace', letterSpacing: '0.08em' }}
                                 />
                                 <small className="form-hint">
-                                    Enter your vehicle registration number
+                                    Format: MH12AB1234 — State · RTO · Series · Number
                                 </small>
                             </div>
 
