@@ -241,34 +241,7 @@ export const checkInBooking = async (bookingId, location, customerId, stationId)
             metadata: { distance: location.distance }
         });
 
-        // ── Auto-fuel: if no vehicle currently fueling, this is the first ─
-        const fuelingSnap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', resolvedStationId),
-                where('status', '==', 'fueling')
-            )
-        );
-
-        if (fuelingSnap.empty) {
-            // No one fueling → this vehicle becomes the first to fuel
-            await updateDoc(bookingRef, {
-                status: 'fueling',
-                fuelingStartedAt: serverTimestamp(),
-                lanePosition: 1,
-                updatedAt: serverTimestamp()
-            });
-
-            await createNotification(
-                customerId,
-                NOTIF_TYPE.TURN_ARRIVED,
-                '🚨 Your Turn Has Arrived!',
-                'You are first at the pump. Fueling will begin shortly.',
-                { stationId: resolvedStationId, bookingId }
-            );
-        }
-
-        // ── Recalculate lane positions for all station bookings ───────────
+        // ── Recalculate lane positions (This will also auto-promote to 'fueling' if station is idle) ──
         await recalculateLanePositions(resolvedStationId);
 
         // ── Notification: check-in confirmed ─────────────────────────────

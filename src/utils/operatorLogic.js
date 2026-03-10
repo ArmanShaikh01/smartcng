@@ -173,13 +173,12 @@ export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
  */
 export const advanceQueue = async (stationId, operatorId) => {
     try {
-        // Get current fueling vehicle (position 1)
+        // Get current fueling vehicle (find by status, not position, because lane order is dynamic)
         const currentBookingSnapshot = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
                 where('stationId', '==', stationId),
-                where('queuePosition', '==', 1),
-                where('status', 'in', ['fueling', 'checked_in'])
+                where('status', '==', 'fueling')
             )
         );
 
@@ -228,6 +227,7 @@ export const advanceQueue = async (stationId, operatorId) => {
         // Update all positions based on new lane order
         const batch = writeBatch(db);
         let nextVehicleNumber = null;
+        let nextVehicleId = null;
 
         sorted.forEach((booking, index) => {
             const newPosition = index + 1;
@@ -236,6 +236,7 @@ export const advanceQueue = async (stationId, operatorId) => {
             if (newPosition === 1) {
                 newStatus = 'fueling';
                 nextVehicleNumber = booking.vehicleNumber;
+                nextVehicleId = booking.id;
             } else if (newPosition <= 10) {
                 newStatus = booking.isCheckedIn ? 'checked_in' : 'eligible';
             } else {
@@ -350,6 +351,7 @@ export const advanceQueue = async (stationId, operatorId) => {
             const stationRef = doc(db, COLLECTIONS.STATIONS, stationDocId);
 
             await updateDoc(stationRef, {
+                currentVehicleId: nextVehicleId || null,
                 totalVehiclesServed: (await getDocs(
                     query(
                         collection(db, COLLECTIONS.BOOKINGS),
@@ -439,6 +441,21 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
         });
 
         await batch.commit();
+
+        // ── Sync station document ──
+        const stationQuery = query(
+            collection(db, COLLECTIONS.STATIONS),
+            where('stationId', '==', stationId)
+        );
+        const stationSnapshot = await getDocs(stationQuery);
+        if (!stationSnapshot.empty) {
+            const stationDocId = stationSnapshot.docs[0].id;
+            const currentId = sorted.find(b => b.status === 'fueling')?.id || null;
+            await updateDoc(doc(db, COLLECTIONS.STATIONS, stationDocId), {
+                currentVehicleId: currentId,
+                updatedAt: serverTimestamp()
+            });
+        }
 
         // ── Notification: no-show customer ──────────────────────────────
         // Fetch customerId from the booking document

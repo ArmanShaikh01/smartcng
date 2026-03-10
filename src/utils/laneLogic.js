@@ -45,7 +45,7 @@ export const getLaneOrder = (bookings) => {
         .sort((a, b) => a.queuePosition - b.queuePosition);
 
     const checkedIn = bookings
-        .filter(b => b.status !== 'fueling' && (b.isCheckedIn || b.status === 'checked_in'))
+        .filter(b => b.status !== 'fueling' && (b.isCheckedIn === true || b.status === 'checked_in'))
         .sort((a, b) => {
             const aTime = toMillis(a.checkedInAt);
             const bTime = toMillis(b.checkedInAt);
@@ -68,6 +68,11 @@ export const getLaneOrder = (bookings) => {
 /**
  * Recalculate lanePosition for every active booking at a station.
  * Call this after check-in, skip, or any event that changes lane order.
+ * 
+ * Logic:
+ *   1. Fetch all active bookings
+ *   2. Sort using getLaneOrder()
+ *   3. If no one is currently 'fueling' and the first one is 'checked_in', promote it!
  *
  * @param {string} stationId – station ID (field value)
  */
@@ -87,16 +92,54 @@ export const recalculateLanePositions = async (stationId) => {
         const bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         const sorted = getLaneOrder(bookings);
 
+        // Check if anyone is currently fueling
+        const currentFueling = sorted.find(b => b.status === 'fueling');
+
         const batch = writeBatch(db);
         sorted.forEach((booking, index) => {
             const newLanePos = index + 1;
-            if (booking.lanePosition !== newLanePos) {
+            let updates = {};
+
+            // If no one is fueling, and this is the first (checked-in) one, start fueling!
+            if (!currentFueling && index === 0 && (booking.isCheckedIn || booking.status === 'checked_in')) {
+                updates.status = 'fueling';
+                updates.fuelingStartedAt = serverTimestamp();
+
+                // Also notify the customer that they can now proceed
+                createNotification(
+                    booking.customerId,
+                    NOTIF_TYPE.TURN_ARRIVED,
+                    '🚨 Your Turn Has Arrived!',
+                    `Vehicle ${booking.vehicleNumber} is at the pump. Please proceed for fueling.`,
+                    { stationId, vehicleNumber: booking.vehicleNumber, bookingId: booking.id }
+                );
+            }
+
+            if (booking.lanePosition !== newLanePos || updates.status) {
                 batch.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
+                    ...updates,
                     lanePosition: newLanePos,
                     updatedAt: serverTimestamp()
                 });
             }
         });
+
+        // Update station document with the current fueling vehicle ID
+        const stationQuery = query(
+            collection(db, COLLECTIONS.STATIONS),
+            where('stationId', '==', stationId)
+        );
+        const stationSnapshot = await getDocs(stationQuery);
+        if (!stationSnapshot.empty) {
+            const stationDocId = stationSnapshot.docs[0].id;
+            const finalSorted = getLaneOrder(sorted); // re-sort after promotion
+            const currentId = finalSorted.find(b => b.status === 'fueling')?.id || null;
+
+            batch.update(doc(db, COLLECTIONS.STATIONS, stationDocId), {
+                currentVehicleId: currentId,
+                updatedAt: serverTimestamp()
+            });
+        }
 
         await batch.commit();
     } catch (err) {
