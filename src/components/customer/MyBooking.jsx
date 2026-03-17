@@ -13,6 +13,7 @@ import CheckInPrompt from './CheckInPrompt';
 import RatingModal from './RatingModal';
 import ComplaintForm from './ComplaintForm';
 import ComplaintTracker from './ComplaintTracker';
+import LiveDirectionsMap from './LiveDirectionsMap';
 import './MyBooking.css';
 
 const AUTO_CANCEL_SECONDS = 10 * 60; // 10 minutes
@@ -23,6 +24,10 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
     const [loading, setLoading] = useState(true);
     const [showCheckIn, setShowCheckIn] = useState(false);
     const [cancelling, setCancelling] = useState(false);
+
+    // Live tracking & gated check-in
+    const [showMap, setShowMap] = useState(false);
+    const [hasArrived, setHasArrived] = useState(false);
 
     // New feature states
     const [showRating, setShowRating] = useState(false);
@@ -62,14 +67,14 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         fetchStation();
     }, [booking.stationId]);
 
-    // ── Check-in prompt ───────────────────────────────────────────────────
+    // ── Check-in prompt — gated behind hasArrived ────────────────────────
     useEffect(() => {
-        if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn) {
+        if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && hasArrived) {
             setShowCheckIn(true);
         } else {
             setShowCheckIn(false);
         }
-    }, [liveBooking.status, liveBooking.isCheckedIn]);
+    }, [liveBooking.status, liveBooking.isCheckedIn, hasArrived]);
 
     // ── Auto-cancel countdown (10 min from when eligible) ─────────────────
     useEffect(() => {
@@ -255,32 +260,60 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 <div className="info-card">
                     <div className="info-label">Station</div>
                     <div className="info-value">{station?.name || 'Loading...'}</div>
-                    {station && (
-                        <a
-                            href={
-                                station.location?.latitude
-                                    ? `https://www.google.com/maps/dir/?api=1&destination=${station.location.latitude},${station.location.longitude}`
-                                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(station.address || station.name)}`
-                            }
-                            target="_blank"
-                            rel="noopener noreferrer"
+                    {station?.location?.latitude && !['fueling', 'completed', 'checked_in'].includes(liveBooking.status) && (
+                        <button
+                            type="button"
+                            onClick={() => setShowMap(true)}
                             style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                                fontSize: '0.72rem', fontWeight: 600,
-                                color: '#1a73e8', textDecoration: 'none',
-                                marginTop: 4,
-                                padding: '3px 8px',
-                                background: '#e8f0fe',
-                                borderRadius: 6
+                                display: 'inline-flex', alignItems: 'center', gap: 6,
+                                fontSize: '0.72rem', fontWeight: 700,
+                                color: '#1a73e8', border: '1.5px solid #c5d9f7',
+                                background: hasArrived ? '#ecfdf5' : '#e8f0fe',
+                                borderColor: hasArrived ? '#6ee7b7' : '#c5d9f7',
+                                color: hasArrived ? '#047857' : '#1a73e8',
+                                borderRadius: 8, padding: '5px 10px',
+                                cursor: 'pointer', marginTop: 6,
                             }}
                         >
-                            🗺️ Get Directions
-                        </a>
+                            {hasArrived ? '✅ Arrived — Re-open Map' : '🗺️ Get Directions'}
+                        </button>
                     )}
                 </div>
             </div>
 
-            {/* ── Check-in prompt — inline card, not a modal ── */}
+            {/* ── Live Directions Map overlay ── */}
+            {showMap && station && (
+                <LiveDirectionsMap
+                    station={station}
+                    onArrived={() => {
+                        setHasArrived(true);
+                        setShowMap(false);
+                    }}
+                    onClose={() => setShowMap(false)}
+                />
+            )}
+
+            {/* ── Arrived hint — before check-in ── */}
+            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && !hasArrived && (
+                <div style={{
+                    background: '#e8f0fe',
+                    border: '1.5px solid #c5d9f7',
+                    borderRadius: 12, padding: '12px 16px', marginTop: 12,
+                    display: 'flex', alignItems: 'center', gap: 10
+                }}>
+                    <span style={{ fontSize: '1.4rem' }}>🗺️</span>
+                    <div>
+                        <div style={{ fontWeight: 700, color: '#1a56db', fontSize: '0.9rem' }}>
+                            Head to the Station
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#374151' }}>
+                            Tap "Get Directions" to start live tracking. Check-in unlocks when you arrive.
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Check-in prompt — inline card, unlocked after arrival ── */}
             {showCheckIn && station && (
                 <CheckInPrompt
                     booking={liveBooking}

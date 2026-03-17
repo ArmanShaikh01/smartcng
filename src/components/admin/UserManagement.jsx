@@ -19,15 +19,15 @@ const UserManagement = () => {
         role: 'operator',
         stationId: ''
     });
+    const [editingUser, setEditingUser] = useState(null);
+    const [activeListTab, setActiveListTab] = useState('staff'); // 'staff' or 'customer'
 
     useEffect(() => {
         // Real-time listener — auto-refreshes whenever roles or any user field changes
         const unsubscribe = onSnapshot(
             collection(db, COLLECTIONS.USERS),
             (snapshot) => {
-                const usersData = snapshot.docs
-                    .map(d => ({ id: d.id, ...d.data() }))
-                    .filter(user => user.role !== 'customer');
+                const usersData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                 setUsers(usersData);
                 setLoading(false);
             },
@@ -63,31 +63,56 @@ const UserManagement = () => {
         }
 
         try {
-            // Create user document with auto-generated ID
-            const newUser = {
-                userId: `${formData.role}_${Date.now()}`,
-                phoneNumber: phoneResult.normalized,
-                name: formData.name,
-                role: formData.role,
-                stationId: formData.role === 'admin' ? null : formData.stationId,
-                vehicles: [],
-                noShowCount: 0,
-                isBanned: false,
-                bannedUntil: null,
-                createdAt: new Date()
-            };
+            if (editingUser) {
+                // Update existing user
+                const updateData = {
+                    phoneNumber: phoneResult.normalized,
+                    name: formData.name,
+                    role: formData.role,
+                    stationId: formData.role === 'admin' ? null : formData.stationId,
+                    updatedAt: new Date()
+                };
+                await updateDoc(doc(db, COLLECTIONS.USERS, editingUser.id), updateData);
+                toast.success('User updated successfully');
+            } else {
+                // Create user document with auto-generated ID
+                const newUser = {
+                    userId: `${formData.role}_${Date.now()}`,
+                    phoneNumber: phoneResult.normalized,
+                    name: formData.name,
+                    role: formData.role,
+                    stationId: formData.role === 'admin' ? null : formData.stationId,
+                    vehicles: [],
+                    noShowCount: 0,
+                    isBanned: false,
+                    bannedUntil: null,
+                    createdAt: new Date()
+                };
 
-            await addDoc(collection(db, COLLECTIONS.USERS), newUser);
+                await addDoc(collection(db, COLLECTIONS.USERS), newUser);
+                toast.success(`${formData.role} created! They can login with: ${phoneResult.normalized}`);
+            }
 
-            toast.success(`${formData.role} created! They can login with: ${phoneResult.normalized}`);
             setShowForm(false);
+            setEditingUser(null);
             setFormData({ phoneNumber: '', name: '', role: 'operator', stationId: '' });
-            fetchUsers();
         } catch (error) {
-            console.error('Error creating user:', error);
-            toast.error('Failed to create user');
+            console.error('Error saving user:', error);
+            toast.error('Failed to save user');
+        } finally {
             setLoading(false);
         }
+    };
+
+    const handleEdit = (user) => {
+        setEditingUser(user);
+        setFormData({
+            phoneNumber: user.phoneNumber || '',
+            name: user.name || '',
+            role: user.role || 'operator',
+            stationId: user.stationId || ''
+        });
+        setShowForm(true);
     };
 
     const handleBlock = async (user) => {
@@ -124,7 +149,6 @@ const UserManagement = () => {
         try {
             await deleteDoc(doc(db, COLLECTIONS.USERS, userId));
             toast.success('User deleted successfully');
-            fetchUsers();
         } catch (error) {
             console.error('Error deleting user:', error);
             toast.error('Failed to delete user');
@@ -148,7 +172,13 @@ const UserManagement = () => {
                     type="button"
                     onClick={(e) => {
                         e.stopPropagation();
-                        setShowForm(!showForm);
+                        if (showForm) {
+                            setShowForm(false);
+                            setEditingUser(null);
+                            setFormData({ phoneNumber: '', name: '', role: 'operator', stationId: '' });
+                        } else {
+                            setShowForm(true);
+                        }
                     }}
                     className="btn btn-primary"
                 >
@@ -158,7 +188,7 @@ const UserManagement = () => {
 
             {showForm && (
                 <div className="um-form card">
-                    <h3>Create New User</h3>
+                    <h3>{editingUser ? 'Edit User' : 'Create New User'}</h3>
                     <form onSubmit={handleSubmit}>
                         <div className="form-group">
                             <label>Phone Number *</label>
@@ -201,6 +231,7 @@ const UserManagement = () => {
                                 <option value="operator">Operator</option>
                                 <option value="owner">Owner</option>
                                 <option value="admin">Admin</option>
+                                <option value="customer">Customer</option>
                             </select>
                         </div>
 
@@ -224,11 +255,26 @@ const UserManagement = () => {
                         )}
 
                         <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-                            {loading ? 'Creating...' : 'Create User'}
+                            {loading ? (editingUser ? 'Updating...' : 'Creating...') : (editingUser ? 'Update User' : 'Create User')}
                         </button>
                     </form>
                 </div>
             )}
+
+            <div className="um-tabs">
+                <button 
+                    className={`um-tab ${activeListTab === 'staff' ? 'active' : ''}`}
+                    onClick={() => setActiveListTab('staff')}
+                >
+                    Staff (Admins/Operators)
+                </button>
+                <button 
+                    className={`um-tab ${activeListTab === 'customer' ? 'active' : ''}`}
+                    onClick={() => setActiveListTab('customer')}
+                >
+                    Customers (New Users)
+                </button>
+            </div>
 
             <div className="um-list">
                 {loading ? (
@@ -248,7 +294,9 @@ const UserManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map(user => (
+                                {users
+                                    .filter(u => activeListTab === 'staff' ? u.role !== 'customer' : u.role === 'customer')
+                                    .map(user => (
                                     <tr
                                         key={user.id}
                                         className={user.isBanned ? 'um-row-blocked' : ''}
@@ -268,6 +316,13 @@ const UserManagement = () => {
                                         <td data-label="Station">{user.stationId || 'N/A'}</td>
                                         <td data-label="Action">
                                             <div className="um-action-btns">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => { e.stopPropagation(); handleEdit(user); }}
+                                                    className="btn-edit"
+                                                >
+                                                    Edit
+                                                </button>
                                                 <button
                                                     type="button"
                                                     onClick={(e) => { e.stopPropagation(); handleBlock(user); }}

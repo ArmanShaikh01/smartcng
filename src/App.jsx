@@ -1,5 +1,5 @@
 // Main App component with role-based routing
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import ToastProvider from './components/shared/Toast';
@@ -17,6 +17,7 @@ const Notifications = lazy(() => import('./pages/Notifications'));
 const Help = lazy(() => import('./pages/Help'));
 const Offline = lazy(() => import('./pages/Offline'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+import SplashScreen from './components/shared/SplashScreen';
 import './App.css';
 
 // Protected route wrapper
@@ -176,15 +177,20 @@ function AppRoutes() {
 }
 
 function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
-    <AuthProvider>
-      <Router>
-        {/* reCAPTCHA widget is managed by auth.js directly on document.body */}
-        <AppRoutes />
-        <ToastProvider />
-        <ConfirmDialogProvider />
-      </Router>
-    </AuthProvider>
+    <>
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
+      <AuthProvider>
+        <Router>
+          {/* reCAPTCHA widget is managed by auth.js directly on document.body */}
+          <AppRoutes />
+          <ToastProvider />
+          <ConfirmDialogProvider />
+        </Router>
+      </AuthProvider>
+    </>
   );
 }
 

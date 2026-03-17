@@ -39,7 +39,7 @@ const VehicleCard = ({ booking, position, isCurrentUser, isFueling, userRole, on
     };
 
     const showNoShowBtn = onNoShow && !isFueling;
-    const showSkipBtn = onSkip && isCheckedIn && !isFueling;
+    const showSkipBtn = onSkip && !isFueling;
 
     // Turn-near: current user is checked-in and actively waiting
     const isTurnNear = isCurrentUser && isCheckedIn && !isFueling;

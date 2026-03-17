@@ -508,12 +508,28 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             return await markNoShow(bookingId, vehicleNumber, stationId, operatorId);
         }
 
-        // Reset check-in → move to end of checked-in group
+        // Reset check-in → move to end of queue
+        // 1. Find the current max queuePosition among all active bookings at this station
+        const activeSnap = await getDocs(
+            query(
+                collection(db, COLLECTIONS.BOOKINGS),
+                where('stationId', '==', stationId),
+                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
+                orderBy('queuePosition', 'asc')
+            )
+        );
+        const maxPos = activeSnap.empty
+            ? 1
+            : Math.max(...activeSnap.docs.map(d => d.data().queuePosition || 0));
+
+        // 2. Push the skipped booking to the very end
         await updateDoc(bookingRef, {
             isCheckedIn: false,
             checkedInAt: null,
             checkInLocation: null,
-            status: 'eligible',
+            status: 'waiting',
+            queuePosition: maxPos + 1,         // last in queue
+            lanePosition: maxPos + 1,
             skipCount: newSkipCount,
             skippedAt: serverTimestamp(),
             skipReason: 'operator_skip',
@@ -532,7 +548,7 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             metadata: { skipCount: newSkipCount }
         });
 
-        // Recalculate lane positions
+        // Recalculate lane positions (compacts gaps and updates lanePosition for everyone)
         await recalculateLanePositions(stationId);
 
         // Notify customer
