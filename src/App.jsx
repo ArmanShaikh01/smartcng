@@ -18,6 +18,7 @@ const Help = lazy(() => import('./pages/Help'));
 const Offline = lazy(() => import('./pages/Offline'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 import SplashScreen from './components/shared/SplashScreen';
+import AppSkeleton from './components/shared/AppSkeleton';
 import './App.css';
 
 // Protected route wrapper
@@ -25,12 +26,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, userRole, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <AppSkeleton />;
   }
 
   if (!user) {
@@ -49,12 +45,7 @@ const RoleBasedHome = () => {
   const { userRole, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="loading-screen">
-        <div className="spinner"></div>
-        <p>Loading...</p>
-      </div>
-    );
+    return <AppSkeleton />;
   }
 
   switch (userRole) {
@@ -73,7 +64,7 @@ const RoleBasedHome = () => {
 
 function AppRoutes() {
   return (
-    <Suspense fallback={<div className="loading-screen"><div className="spinner"></div><p>Loading…</p></div>}>
+    <Suspense fallback={<AppSkeleton />}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<RoleBasedHome />} />
