@@ -15,7 +15,7 @@ import {
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
-import { getLaneOrder, recalculateLanePositions, expireStaleCheckIns } from './laneLogic';
+import { evaluateGate, GATE_END } from './gateLogic';
 
 /**
  * Toggle station gas status
@@ -173,7 +173,7 @@ export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
  */
 export const advanceQueue = async (stationId, operatorId) => {
     try {
-        // Get current fueling vehicle (find by status, not position, because lane order is dynamic)
+        // Get current fueling vehicle
         const currentBookingSnapshot = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
@@ -189,6 +189,7 @@ export const advanceQueue = async (stationId, operatorId) => {
         const currentBooking = currentBookingSnapshot.docs[0];
         const currentBookingId = currentBooking.id;
         const currentVehicleNumber = currentBooking.data().vehicleNumber;
+        const completedCustId = currentBooking.data().customerId;
 
         // Mark current booking as completed
         await updateDoc(doc(db, COLLECTIONS.BOOKINGS, currentBookingId), {
@@ -208,59 +209,7 @@ export const advanceQueue = async (stationId, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // Get all remaining bookings
-        const remainingBookings = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in']),
-                orderBy('queuePosition', 'asc')
-            )
-        );
-
-        // Collect remaining bookings and sort using lane-priority logic:
-        // Checked-in vehicles sorted by checkedInAt (physical lane order),
-        // then eligible (not checked in) by queuePosition, then waiting.
-        const remaining = remainingBookings.docs.map(d => ({ id: d.id, ...d.data() }));
-        const sorted = getLaneOrder(remaining);
-
-        // Update all positions based on new lane order
-        const batch = writeBatch(db);
-        let nextVehicleNumber = null;
-        let nextVehicleId = null;
-
-        sorted.forEach((booking, index) => {
-            const newPosition = index + 1;
-
-            let newStatus;
-            if (newPosition === 1) {
-                newStatus = 'fueling';
-                nextVehicleNumber = booking.vehicleNumber;
-                nextVehicleId = booking.id;
-            } else if (newPosition <= 10) {
-                newStatus = booking.isCheckedIn ? 'checked_in' : 'eligible';
-            } else {
-                newStatus = 'waiting';
-            }
-
-            batch.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
-                queuePosition: newPosition,
-                lanePosition: newPosition,
-                status: newStatus,
-                eligibleAt: newPosition <= 10 && !booking.eligibleAt
-                    ? serverTimestamp()
-                    : (booking.eligibleAt ?? null),
-                fuelingStartedAt: newPosition === 1 ? serverTimestamp() : null,
-                estimatedWaitMinutes: (newPosition - 1) * 3,
-                updatedAt: serverTimestamp()
-            });
-        });
-
-        await batch.commit();
-
-        // ── Notifications after queue advance ─────────────────────────────────
-        // 1. Notify completed customer
-        const completedCustId = currentBooking.data().customerId;
+        // ── Notification: fueling completed ──
         if (completedCustId) {
             await createNotification(
                 completedCustId,
@@ -271,73 +220,20 @@ export const advanceQueue = async (stationId, operatorId) => {
             );
         }
 
-        // 2. Notify the newly-promoted vehicle (now at position 1)
-        if (sorted.length > 0) {
-            const nextBooking = sorted[0];
-            if (nextBooking.customerId) {
-                await createNotification(
-                    nextBooking.customerId,
-                    NOTIF_TYPE.TURN_ARRIVED,
-                    '🚨 Your Turn Has Arrived!',
-                    `Vehicle ${nextBooking.vehicleNumber} is now at the pump. Please proceed for fueling.`,
-                    { stationId, vehicleNumber: nextBooking.vehicleNumber, bookingId: nextBooking.id }
-                );
-            }
-        }
+        // ── Evaluate gate: shift positions, promote checked-in, notify batch ──
+        await evaluateGate(stationId);
 
-        // 3. Notify customers newly promoted into eligible zone (positions 2–10)
-        //    so they know to head to the station and check-in
-        const newlyEligible = sorted.slice(1, 10); // positions 2–10 after the advance
-        await Promise.all(
-            newlyEligible
-                .filter(b => b.customerId && !b.isCheckedIn)
-                .map(b =>
-                    createNotification(
-                        b.customerId,
-                        NOTIF_TYPE.CHECK_IN_REMINDER,
-                        '📍 Proceed to Station — Check-in Required',
-                        `Your queue position is now #${b.queuePosition}. Please arrive at the station and check-in.`,
-                        { stationId, vehicleNumber: b.vehicleNumber, bookingId: b.id, queuePosition: b.queuePosition }
-                    )
-                )
-        );
-
-        // 4. SAFEGUARD 3: Pre-arrival notification for positions 11-13
-        const preArrival = sorted.filter(b =>
-            b.queuePosition >= 11 && b.queuePosition <= 13 && b.customerId
-        );
-        await Promise.all(preArrival.map(b =>
-            createNotification(
-                b.customerId,
-                NOTIF_TYPE.PRE_ARRIVAL_ALERT,
-                '🚗 Get Ready! Your turn is approaching',
-                `You are #${b.queuePosition} in queue. Start heading to the station now!`,
-                { stationId, bookingId: b.id, vehicleNumber: b.vehicleNumber, queuePosition: b.queuePosition }
+        // Get updated state to find the new fueling vehicle
+        const updatedSnap = await getDocs(
+            query(
+                collection(db, COLLECTIONS.BOOKINGS),
+                where('stationId', '==', stationId),
+                where('status', '==', 'fueling')
             )
-        ));
-
-        // 5. Expire stale check-ins (Safeguard 2)
-        await expireStaleCheckIns(stationId);
-
-        // 6. Queue backlog alert to owner if queue > 15
-        const queueLen = sorted.length + 1; // +1 for the one just completed
-        if (queueLen > 15) {
-            const stationDataSnap = await getDocs(
-                query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', stationId))
-            );
-            if (!stationDataSnap.empty) {
-                const stData = stationDataSnap.docs[0].data();
-                if (stData.ownerId) {
-                    await createNotification(
-                        stData.ownerId,
-                        NOTIF_TYPE.QUEUE_BACKLOG_ALERT,
-                        '🚨 Queue Backlog Alert',
-                        `Station ${stationId} has ${queueLen} vehicles in queue. Consider adding more operators.`,
-                        { stationId, queueLength: queueLen }
-                    );
-                }
-            }
-        }
+        );
+        const nextVehicleNumber = updatedSnap.empty
+            ? 'Queue empty'
+            : updatedSnap.docs[0].data().vehicleNumber;
 
         // Update station stats
         const stationQuery = query(
@@ -351,7 +247,6 @@ export const advanceQueue = async (stationId, operatorId) => {
             const stationRef = doc(db, COLLECTIONS.STATIONS, stationDocId);
 
             await updateDoc(stationRef, {
-                currentVehicleId: nextVehicleId || null,
                 totalVehiclesServed: (await getDocs(
                     query(
                         collection(db, COLLECTIONS.BOOKINGS),
@@ -364,7 +259,7 @@ export const advanceQueue = async (stationId, operatorId) => {
 
         return {
             success: true,
-            nextVehicle: nextVehicleNumber || 'Queue empty',
+            nextVehicle: nextVehicleNumber,
             completedVehicle: currentVehicleNumber
         };
     } catch (error) {
@@ -402,63 +297,10 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
             timestamp: serverTimestamp()
         });
 
-        // Re-fetch remaining active bookings and reorder
-        const remaining = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
-                orderBy('queuePosition', 'asc')
-            )
-        );
+        // ── Evaluate gate: recompact positions, promote checked-in, notify batch ──
+        await evaluateGate(stationId);
 
-        const remainingList = remaining.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        // Use lane-priority sorting: fueling first, then checked-in by checkedInAt, then rest
-        const fueling = remainingList.filter(b => b.status === 'fueling');
-        const rest = remainingList.filter(b => b.status !== 'fueling');
-        const sorted = [...fueling, ...getLaneOrder(rest)];
-
-        const batch = writeBatch(db);
-        sorted.forEach((booking, index) => {
-            const newPosition = index + 1;
-            let newStatus;
-            if (booking.status === 'fueling') {
-                newStatus = 'fueling';
-            } else if (newPosition <= 10) {
-                newStatus = booking.isCheckedIn ? 'checked_in' : 'eligible';
-            } else {
-                newStatus = 'waiting';
-            }
-
-            batch.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
-                queuePosition: newPosition,
-                lanePosition: newPosition,
-                status: newStatus,
-                estimatedWaitMinutes: (newPosition - 1) * 3,
-                updatedAt: serverTimestamp()
-            });
-        });
-
-        await batch.commit();
-
-        // ── Sync station document ──
-        const stationQuery = query(
-            collection(db, COLLECTIONS.STATIONS),
-            where('stationId', '==', stationId)
-        );
-        const stationSnapshot = await getDocs(stationQuery);
-        if (!stationSnapshot.empty) {
-            const stationDocId = stationSnapshot.docs[0].id;
-            const currentId = sorted.find(b => b.status === 'fueling')?.id || null;
-            await updateDoc(doc(db, COLLECTIONS.STATIONS, stationDocId), {
-                currentVehicleId: currentId,
-                updatedAt: serverTimestamp()
-            });
-        }
-
-        // ── Notification: no-show customer ──────────────────────────────
-        // Fetch customerId from the booking document
+        // ── Notification: no-show customer ──
         const noShowBookingRef = doc(db, COLLECTIONS.BOOKINGS, bookingId);
         const noShowSnap = await getDoc(noShowBookingRef);
         if (noShowSnap.exists()) {
@@ -508,8 +350,7 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             return await markNoShow(bookingId, vehicleNumber, stationId, operatorId);
         }
 
-        // Reset check-in → move to end of queue
-        // 1. Find the current max queuePosition among all active bookings at this station
+        // Find max queue position to push this vehicle to end
         const activeSnap = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
@@ -522,17 +363,17 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             ? 1
             : Math.max(...activeSnap.docs.map(d => d.data().queuePosition || 0));
 
-        // 2. Push the skipped booking to the very end
+        // Push the skipped booking to the very end
         await updateDoc(bookingRef, {
             isCheckedIn: false,
             checkedInAt: null,
             checkInLocation: null,
             status: 'waiting',
-            queuePosition: maxPos + 1,         // last in queue
-            lanePosition: maxPos + 1,
+            queuePosition: maxPos + 1,
             skipCount: newSkipCount,
             skippedAt: serverTimestamp(),
             skipReason: 'operator_skip',
+            gateNotifiedAt: null,
             updatedAt: serverTimestamp()
         });
 
@@ -548,8 +389,8 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             metadata: { skipCount: newSkipCount }
         });
 
-        // Recalculate lane positions (compacts gaps and updates lanePosition for everyone)
-        await recalculateLanePositions(stationId);
+        // Evaluate gate: recompact positions, promote, notify batch
+        await evaluateGate(stationId);
 
         // Notify customer
         if (bookingData.customerId) {

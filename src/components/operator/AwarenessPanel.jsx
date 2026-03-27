@@ -1,20 +1,11 @@
-// Awareness Panel - Shows current and next vehicle (lane-priority aware)
+// Awareness Panel - Shows current and next vehicle
 import Icon from '../shared/Icon';
 import './AwarenessPanel.css';
 
 const AwarenessPanel = ({ currentVehicle, nextVehicle, queueLength }) => {
     const renderPosition = (vehicle) => {
-        const lanePos = vehicle.lanePosition ?? vehicle.queuePosition;
-        const tokenPos = vehicle.queuePosition;
         return (
-            <>
-                <div className="vehicle-position">Lane #{lanePos}</div>
-                {lanePos !== tokenPos && (
-                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: 1 }}>
-                        Token #{tokenPos}
-                    </div>
-                )}
-            </>
+            <div className="vehicle-position">Position #{vehicle.queuePosition}</div>
         );
     };
 

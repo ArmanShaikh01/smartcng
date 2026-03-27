@@ -22,8 +22,8 @@ const OperatorHome = () => {
 
     const [showFullQueue, setShowFullQueue] = useState(false);
 
-    const currentVehicle = queue.find(b => (b.lanePosition ?? b.queuePosition) === 1);
-    const nextVehicle = queue.find(b => (b.lanePosition ?? b.queuePosition) === 2);
+    const currentVehicle = queue.find(b => b.queuePosition === 1);
+    const nextVehicle = queue.find(b => b.queuePosition === 2);
 
     const handleQueueAdvanced = (result) => {
         // Show success notification

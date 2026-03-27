@@ -14,7 +14,7 @@ import {
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
-import { recalculateLanePositions } from './laneLogic';
+import { evaluateGate, GATE_END } from './gateLogic';
 
 /**
  * Validate if booking is allowed
@@ -94,13 +94,12 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
             customerPhone,
             queuePosition: newPosition,
             originalPosition: newPosition,
-            lanePosition: newPosition,
-            status: newPosition <= 10 ? 'eligible' : 'waiting',
+            status: newPosition <= GATE_END ? 'eligible' : 'waiting',
             isCheckedIn: false,
             checkedInAt: null,
             checkInLocation: null,
             bookedAt: serverTimestamp(),
-            eligibleAt: newPosition <= 10 ? serverTimestamp() : null,
+            eligibleAt: newPosition <= GATE_END ? serverTimestamp() : null,
             fuelingStartedAt: null,
             completedAt: null,
             skippedAt: null,
@@ -134,8 +133,8 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
             { stationId, bookingId: bookingRef.id, vehicleNumber, queuePosition: newPosition }
         );
 
-        // ── Notification: check-in reminder for top-10 positions ─────────
-        if (newPosition <= 10) {
+        // ── Notification: check-in reminder for top-15 positions ─────────
+        if (newPosition <= GATE_END) {
             await createNotification(
                 customerId,
                 NOTIF_TYPE.CHECK_IN_REMINDER,
@@ -215,8 +214,8 @@ export const checkInBooking = async (bookingId, location, customerId, stationId)
             return { success: false, error: 'Booking not found.' };
         }
         const bookingData = bookingSnap.data();
-        if (bookingData.queuePosition > 10) {
-            return { success: false, error: 'Check-in is only available for top 10 positions. Your position: #' + bookingData.queuePosition };
+        if (bookingData.queuePosition > GATE_END) {
+            return { success: false, error: 'Check-in is only available for top ' + GATE_END + ' positions. Your position: #' + bookingData.queuePosition };
         }
 
         // Resolve stationId from booking if not passed
@@ -241,8 +240,8 @@ export const checkInBooking = async (bookingId, location, customerId, stationId)
             metadata: { distance: location.distance }
         });
 
-        // ── Recalculate lane positions (This will also auto-promote to 'fueling' if station is idle) ──
-        await recalculateLanePositions(resolvedStationId);
+        // ── Evaluate gate (promote checked-in to top 10, auto-promote to 'fueling' if idle) ──
+        await evaluateGate(resolvedStationId);
 
         // ── Notification: check-in confirmed ─────────────────────────────
         await createNotification(

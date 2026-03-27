@@ -111,7 +111,7 @@ const CheckInPrompt = ({ booking, station, onCheckInSuccess }) => {
                         handleCheckIn();
                     }}
                     className="btn btn-primary btn-block btn-large"
-                    disabled={checking || gpsLoading || booking.queuePosition > 10}
+                    disabled={checking || gpsLoading || booking.queuePosition > 15}
                     style={{ position: 'relative', zIndex: 10, cursor: 'pointer' }}
                 >
                     {checking || gpsLoading ? (
@@ -130,13 +130,13 @@ const CheckInPrompt = ({ booking, station, onCheckInSuccess }) => {
                     ⚠️ Check-in is mandatory. You must be within {station.checkInRadius || 15} meters of the station.
                 </p>
 
-                {booking.queuePosition > 10 && (
+                {booking.queuePosition > 15 && (
                     <div style={{
                         background: '#fef3c7', border: '1px solid #fcd34d',
                         borderRadius: 10, padding: '10px 14px', marginTop: 8,
                         fontSize: '0.82rem', color: '#92400e', textAlign: 'center'
                     }}>
-                        🔒 Check-in opens when you reach the top 10. Current position: #{booking.queuePosition}
+                        🔒 Check-in opens when you reach the top 15. Current position: #{booking.queuePosition}
                     </div>
                 )}
             </div>

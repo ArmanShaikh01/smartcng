@@ -38,8 +38,8 @@ export const useRealtimeQueue = (stationId) => {
                     });
                 });
 
-                // Sort by lane position (physical serving order), fallback to queue position
-                bookings.sort((a, b) => (a.lanePosition ?? a.queuePosition) - (b.lanePosition ?? b.queuePosition));
+                // Sort by queue position (booking order FCFS)
+                bookings.sort((a, b) => a.queuePosition - b.queuePosition);
 
                 setQueue(bookings);
                 setLoading(false);

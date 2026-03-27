@@ -1,20 +1,18 @@
-// Vehicle Card Component - Individual vehicle in queue (lane-priority aware)
+// Vehicle Card Component - Individual vehicle in queue
 import Icon from './Icon';
 import StatusIndicator from './StatusIndicator';
 import './VehicleCard.css';
 
 /**
- * Vehicle card showing lane position, token number, and check-in status
+ * Vehicle card showing queue position and check-in status
  */
 const VehicleCard = ({ booking, position, isCurrentUser, isFueling, userRole, onNoShow, onSkip, noShowLoading, skipLoading }) => {
-    const { vehicleNumber, isCheckedIn, lanePosition, queuePosition } = booking;
+    const { vehicleNumber, isCheckedIn, queuePosition } = booking;
 
-    // Use lanePosition if available, fallback to prop position
-    const displayLanePos = lanePosition ?? position;
-    const displayTokenPos = queuePosition ?? position;
-    const positionsDiffer = displayLanePos !== displayTokenPos;
+    // Use queue position
+    const displayPos = position ?? queuePosition;
 
-    // Late vehicle: eligible but not checked in
+    // Eligible but not checked in
     const isLate = !isCheckedIn && !isFueling && (booking.status === 'eligible');
 
     const getStatusColor = () => {
@@ -27,7 +25,7 @@ const VehicleCard = ({ booking, position, isCurrentUser, isFueling, userRole, on
     const getStatusText = () => {
         if (isFueling) return 'Currently Fueling';
         if (isCheckedIn) return 'Present';
-        if (isLate) return 'Late — not arrived';
+        if (isLate) return 'Not checked-in';
         return 'Not arrived';
     };
 
@@ -47,12 +45,7 @@ const VehicleCard = ({ booking, position, isCurrentUser, isFueling, userRole, on
     return (
         <div className={`vehicle-card anim-card ${isCurrentUser ? 'current-user' : ''} ${getStatusColor()} ${isTurnNear ? 'turn-near' : ''}`}>
             <div className="vehicle-position">
-                <span className="position-number">#{displayLanePos}</span>
-                {positionsDiffer && (
-                    <span style={{ fontSize: '0.6rem', color: '#9ca3af', display: 'block', marginTop: 1 }}>
-                        Token #{displayTokenPos}
-                    </span>
-                )}
+                <span className="position-number">#{displayPos}</span>
             </div>
 
             <StatusIndicator status={getStatusColor()} isFueling={isFueling} />

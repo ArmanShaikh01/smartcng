@@ -1,4 +1,4 @@
-// Visual Queue Simulation Component (lane-priority aware)
+// Visual Queue Simulation Component (batch gate queue)
 import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useRealtimeQueue } from '../../hooks/useRealtimeQueue';
@@ -97,14 +97,14 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
                 </div>
             </div>
 
-            {/* Lane-order explainer */}
+            {/* Queue info */}
             <div style={{
                 background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8,
                 padding: '8px 12px', marginBottom: 10, fontSize: '0.75rem',
                 color: '#1e40af', display: 'flex', alignItems: 'center', gap: 6
             }}>
                 <span>ℹ️</span>
-                <span>Lane order — checked-in vehicles near the pump are served first.</span>
+                <span>Queue order — vehicles are served in booking order (FCFS). Check-in required.</span>
             </div>
 
             <div className="queue-legend">
@@ -114,7 +114,7 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
                 </div>
                 <div className="legend-item">
                     <span className="status-dot" style={{ background: '#f59e0b' }}></span>
-                    <span>Late</span>
+                    <span>Eligible</span>
                 </div>
                 <div className="legend-item">
                     <span className="status-dot red"></span>
@@ -127,7 +127,7 @@ const VisualQueue = ({ stationId, userRole, currentUserId, maxDisplay = null }) 
                     <VehicleCard
                         key={booking.id}
                         booking={booking}
-                        position={booking.lanePosition ?? booking.queuePosition}
+                        position={booking.queuePosition}
                         isCurrentUser={booking.customerId === currentUserId}
                         isFueling={booking.status === 'fueling'}
                         userRole={userRole}
