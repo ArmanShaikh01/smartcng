@@ -216,3 +216,124 @@
         font-size: var(--text-3xl);
     }
 }
+
+/* ── Inline Check-in Card ── */
+.checkin-inline-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+    border: 2px solid #86efac;
+    border-radius: 16px;
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-shadow: 0 2px 12px rgba(14, 124, 91, 0.08);
+    transition: all 0.3s ease;
+}
+
+.checkin-inline-card:has(.checkin-inline-btn.disabled) {
+    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+    border-color: #d1d5db;
+    box-shadow: none;
+}
+
+.checkin-inline-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkin-inline-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.checkin-inline-title {
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-primary-700, #047857);
+}
+
+.checkin-inline-card:has(.checkin-inline-btn.disabled) .checkin-inline-title {
+    color: #6b7280;
+}
+
+.checkin-inline-distance {
+    font-size: 0.78rem;
+    color: #6b7280;
+    padding: 6px 10px;
+    background: #f3f4f6;
+    border-radius: 8px;
+}
+
+.checkin-inline-error {
+    font-size: 0.8rem;
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+/* ── Check-in Button — Enabled ── */
+.checkin-inline-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.checkin-inline-btn.enabled {
+    background: linear-gradient(135deg, #0E7C5B 0%, #059669 50%, #10b981 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(14, 124, 91, 0.35);
+    animation: checkin-pulse 2s ease-in-out infinite;
+}
+
+.checkin-inline-btn.enabled:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(14, 124, 91, 0.45);
+}
+
+.checkin-inline-btn.enabled:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(14, 124, 91, 0.3);
+}
+
+/* ── Check-in Button — Disabled ── */
+.checkin-inline-btn.disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.checkin-inline-btn.disabled span {
+    opacity: 0.5;
+}
+
+@keyframes checkin-pulse {
+    0%, 100% { box-shadow: 0 4px 14px rgba(14, 124, 91, 0.35); }
+    50% { box-shadow: 0 4px 24px rgba(14, 124, 91, 0.55); }
+}
+
+.checkin-inline-lock-notice {
+    font-size: 0.78rem;
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+}

@@ -3,13 +3,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { doc, getDocs, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { COLLECTIONS } from '../../firebase/firestore';
-import { cancelBooking } from '../../utils/queueLogic';
+import { cancelBooking, checkInBooking } from '../../utils/queueLogic';
 import { useWaitTime } from '../../hooks/useWaitTime';
 import { useStationRating } from '../../hooks/useStationRating';
+import { calculateDistance } from '../../hooks/useGeolocation';
 import { toast } from '../../utils/toast';
 import { confirm } from '../../utils/confirm';
 import VisualQueue from '../shared/VisualQueue';
-import CheckInPrompt from './CheckInPrompt';
 import RatingModal from './RatingModal';
 import ComplaintForm from './ComplaintForm';
 import ComplaintTracker from './ComplaintTracker';
@@ -22,12 +22,16 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
     const [station, setStation] = useState(null);
     const [liveBooking, setLiveBooking] = useState(booking);
     const [loading, setLoading] = useState(true);
-    const [showCheckIn, setShowCheckIn] = useState(false);
     const [cancelling, setCancelling] = useState(false);
 
     // Live tracking & gated check-in
     const [showMap, setShowMap] = useState(false);
-    const [hasArrived, setHasArrived] = useState(false);
+    const [isWithinRadius, setIsWithinRadius] = useState(false);
+    const [userDistance, setUserDistance] = useState(null);
+    const [checkingIn, setCheckingIn] = useState(false);
+    const [checkInError, setCheckInError] = useState('');
+    const insideRadiusRef = useRef(false);
+    const gpsWatchRef = useRef(null);
 
     // New feature states
     const [showRating, setShowRating] = useState(false);
@@ -67,14 +71,48 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         fetchStation();
     }, [booking.stationId]);
 
-    // ── Check-in prompt — gated behind hasArrived ────────────────────────
+    // ── Continuous GPS tracking — watches location & determines if within station radius ──
     useEffect(() => {
-        if (liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && hasArrived) {
-            setShowCheckIn(true);
-        } else {
-            setShowCheckIn(false);
-        }
-    }, [liveBooking.status, liveBooking.isCheckedIn, hasArrived]);
+        if (!station?.location?.latitude || !station?.location?.longitude) return;
+        if (['fueling', 'completed', 'checked_in'].includes(liveBooking.status)) return;
+        if (liveBooking.isCheckedIn) return;
+
+        const stationLat = station.location.latitude;
+        const stationLng = station.location.longitude;
+        const radius = station.checkInRadius || 50;
+        const ARRIVED_BUFFER = 10; // must be this far inside radius to trigger
+        const LEAVE_BUFFER = 30;   // must exceed radius + this to un-trigger (prevents flicker)
+
+        if (!navigator.geolocation) return;
+
+        gpsWatchRef.current = navigator.geolocation.watchPosition(
+            (pos) => {
+                const dist = Math.round(calculateDistance(
+                    pos.coords.latitude, pos.coords.longitude,
+                    stationLat, stationLng
+                ));
+                setUserDistance(dist);
+
+                // Hysteresis to prevent GPS jitter toggling the button
+                if (!insideRadiusRef.current && dist <= radius - ARRIVED_BUFFER) {
+                    insideRadiusRef.current = true;
+                    setIsWithinRadius(true);
+                } else if (insideRadiusRef.current && dist > radius + LEAVE_BUFFER) {
+                    insideRadiusRef.current = false;
+                    setIsWithinRadius(false);
+                }
+            },
+            () => { /* GPS error — button stays disabled */ },
+            { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+        );
+
+        return () => {
+            if (gpsWatchRef.current !== null) {
+                navigator.geolocation.clearWatch(gpsWatchRef.current);
+                gpsWatchRef.current = null;
+            }
+        };
+    }, [station, liveBooking.status, liveBooking.isCheckedIn]);
 
     // ── Auto-cancel countdown (10 min from when eligible) ─────────────────
     useEffect(() => {
@@ -156,6 +194,51 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             toast.error('Failed to cancel booking. Please try again.');
             setCancelling(false);
         }
+    };
+
+    // ── Handle inline check-in (GPS verified at click time) ──
+    const handleCheckIn = async () => {
+        setCheckInError('');
+        setCheckingIn(true);
+
+        try {
+            // Get fresh GPS fix
+            const pos = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, {
+                    enableHighAccuracy: true, timeout: 10000, maximumAge: 0
+                });
+            });
+
+            const userLat = pos.coords.latitude;
+            const userLng = pos.coords.longitude;
+            const stationLat = station.location.latitude;
+            const stationLng = station.location.longitude;
+            const checkRadius = station.checkInRadius || 15;
+
+            const dist = Math.round(calculateDistance(userLat, userLng, stationLat, stationLng));
+
+            if (dist > checkRadius) {
+                setCheckInError(`You are ${dist}m away. Must be within ${checkRadius}m.`);
+                setCheckingIn(false);
+                return;
+            }
+
+            const result = await checkInBooking(
+                liveBooking.id,
+                { latitude: userLat, longitude: userLng, accuracy: pos.coords.accuracy, distance: dist },
+                liveBooking.customerId,
+                liveBooking.stationId
+            );
+
+            if (result.success) {
+                toast.success('Check-in successful! 🎉');
+            } else {
+                setCheckInError(result.error || 'Check-in failed. Try again.');
+            }
+        } catch (err) {
+            setCheckInError('Unable to get your location. Please enable GPS.');
+        }
+        setCheckingIn(false);
     };
 
     const formatCountdown = (secs) => {
@@ -262,15 +345,15 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                             style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 6,
                                 fontSize: '0.72rem', fontWeight: 700,
-                                color: '#1a73e8', border: '1.5px solid #c5d9f7',
-                                background: hasArrived ? '#ecfdf5' : '#e8f0fe',
-                                borderColor: hasArrived ? '#6ee7b7' : '#c5d9f7',
-                                color: hasArrived ? '#047857' : '#1a73e8',
+                                background: isWithinRadius ? '#ecfdf5' : '#e8f0fe',
+                                borderColor: isWithinRadius ? '#6ee7b7' : '#c5d9f7',
+                                color: isWithinRadius ? '#047857' : '#1a73e8',
+                                border: '1.5px solid',
                                 borderRadius: 8, padding: '5px 10px',
                                 cursor: 'pointer', marginTop: 6,
                             }}
                         >
-                            {hasArrived ? '✅ Arrived — Re-open Map' : '🗺️ Get Directions'}
+                            {isWithinRadius ? '✅ Arrived — Re-open Map' : '🗺️ Get Directions'}
                         </button>
                     )}
                 </div>
@@ -280,49 +363,62 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             {showMap && station && (
                 <LiveDirectionsMap
                     station={station}
-                    onArrived={() => {
-                        setHasArrived(true);
-                        setShowMap(false);
-                    }}
+                    onArrived={() => setShowMap(false)}
                     onClose={() => setShowMap(false)}
                 />
             )}
 
-            {/* ── Arrived hint — before check-in ── */}
-            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && !hasArrived && (
-                <div style={{
-                    background: '#e8f0fe',
-                    border: '1.5px solid #c5d9f7',
-                    borderRadius: 12, padding: '12px 16px', marginTop: 12,
-                    display: 'flex', alignItems: 'center', gap: 10
-                }}>
-                    <span style={{ fontSize: '1.4rem' }}>🗺️</span>
-                    <div>
-                        <div style={{ fontWeight: 700, color: '#1a56db', fontSize: '0.9rem' }}>
-                            Head to the Station
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: '#374151' }}>
-                            Tap "Get Directions" to start live tracking. Check-in unlocks when you arrive.
+            {/* ── Always-visible Check-in Button (above countdown) ── */}
+            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+                <div className="checkin-inline-card">
+                    <div className="checkin-inline-header">
+                        <span className="checkin-inline-icon">{isWithinRadius ? '✅' : '📍'}</span>
+                        <div className="checkin-inline-title">
+                            {isWithinRadius
+                                ? 'You\'re at the station!'
+                                : 'Check-in to confirm arrival'}
                         </div>
                     </div>
+
+                    {userDistance !== null && !isWithinRadius && (
+                        <div className="checkin-inline-distance">
+                            🚗 {userDistance < 1000 ? `${userDistance}m` : `${(userDistance / 1000).toFixed(1)}km`} away · Check-in unlocks within {station?.checkInRadius || 50}m
+                        </div>
+                    )}
+
+                    {checkInError && (
+                        <div className="checkin-inline-error">⚠️ {checkInError}</div>
+                    )}
+
+                    <button
+                        type="button"
+                        className={`checkin-inline-btn ${isWithinRadius ? 'enabled' : 'disabled'}`}
+                        disabled={!isWithinRadius || checkingIn || liveBooking.queuePosition > 15}
+                        onClick={handleCheckIn}
+                    >
+                        {checkingIn ? (
+                            <><div className="spinner-small"></div> Verifying location...</>
+                        ) : isWithinRadius ? (
+                            <><span>📍</span> I Have Arrived — Check In</>
+                        ) : (
+                            <><span>🔒</span> Check-in (Reach Station First)</>
+                        )}
+                    </button>
+
+                    {liveBooking.queuePosition > 15 && (
+                        <div className="checkin-inline-lock-notice">
+                            🔒 Check-in opens at position ≤15. You're #{liveBooking.queuePosition}
+                        </div>
+                    )}
                 </div>
             )}
 
-            {/* ── Check-in prompt — inline card, unlocked after arrival ── */}
-            {showCheckIn && station && (
-                <CheckInPrompt
-                    booking={liveBooking}
-                    station={station}
-                    onCheckInSuccess={() => setShowCheckIn(false)}
-                />
-            )}
-
-
+            {/* ── Countdown timer ── */}
             {countdown !== null && countdown > 0 && liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
                 <div className="check-in-urgency" style={{
                     background: countdown < 120 ? '#fef2f2' : '#fef9ec',
                     border: `1.5px solid ${countdown < 120 ? '#fca5a5' : '#fcd34d'}`,
-                    borderRadius: 12, padding: '12px 16px', marginTop: 12,
+                    borderRadius: 12, padding: '12px 16px', marginTop: 0,
                     display: 'flex', alignItems: 'center', gap: 10
                 }}>
                     <span style={{ fontSize: '1.4rem' }}>⏱️</span>
@@ -337,8 +433,8 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                 </div>
             )}
 
-            {/* ── Check-in reminder (text only — button is in CheckInPrompt card above) ── */}
-            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && !showCheckIn && (
+            {/* ── Check-in reminder ── */}
+            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
                 <div className="check-in-reminder">
                     <p>⚠️ You are now eligible to check-in. Please arrive at the station and check-in within 10 minutes.</p>
                 </div>
