@@ -12,17 +12,50 @@ import './Notifications.css';
 
 // ─── Icon + colour mapping per notification type ────────────────────────────
 const TYPE_META = {
-    booking_confirmed:      { icon: 'checkCircle', variant: 'success' },
-    booking_cancelled:      { icon: 'xCircle',     variant: 'info'    },
-    booking_no_show:        { icon: 'alertTriangle',variant: 'danger'  },
-    queue_position_updated: { icon: 'queue',        variant: 'info'    },
-    turn_arrived:           { icon: 'play',         variant: 'warning' },
-    fueling_completed:      { icon: 'checkCircle',  variant: 'success' },
-    booking_closed:         { icon: 'ban',          variant: 'warning' },
-    queue_alert:            { icon: 'alertTriangle',variant: 'danger'  },
-    gas_turned_off:         { icon: 'alertTriangle',variant: 'danger'  },
-    station_booking_off:    { icon: 'ban',          variant: 'warning' },
-    system_alert:           { icon: 'shield',       variant: 'danger'  },
+    // Customer
+    booking_confirmed:      { icon: 'checkCircle',  variant: 'success' },
+    booking_cancelled:      { icon: 'xCircle',      variant: 'info'    },
+    booking_no_show:        { icon: 'alertTriangle', variant: 'danger'  },
+    queue_position_updated: { icon: 'queue',         variant: 'info'    },
+    turn_arrived:           { icon: 'play',          variant: 'warning' },
+    turn_soon:              { icon: 'clock',         variant: 'warning' },
+    fueling_completed:      { icon: 'checkCircle',   variant: 'success' },
+    check_in_reminder:      { icon: 'mapPin',        variant: 'info'    },
+    checked_in_ok:          { icon: 'checkCircle',   variant: 'success' },
+    pre_arrival_alert:      { icon: 'navigation',    variant: 'info'    },
+    check_in_expired:       { icon: 'clock',         variant: 'danger'  },
+    vehicle_skipped:        { icon: 'skipForward',   variant: 'warning' },
+
+    // Operator — system
+    booking_closed:         { icon: 'ban',           variant: 'warning' },
+    queue_alert:            { icon: 'alertTriangle', variant: 'danger'  },
+    operator_added:         { icon: 'userPlus',      variant: 'success' },
+    operator_removed:       { icon: 'userMinus',     variant: 'danger'  },
+
+    // Operator — owner action alerts
+    owner_completed_token:  { icon: 'checkCircle',   variant: 'warning' },  // Yellow
+    owner_skipped_token:    { icon: 'skipForward',   variant: 'danger'  },  // Red
+    gps_checkin_alert:      { icon: 'mapPin',        variant: 'success' },  // Green
+    booking_closed_alert:   { icon: 'lock',          variant: 'info'    },  // Grey
+
+    // Owner — operator monitoring
+    operator_queue_advance: { icon: 'play',          variant: 'info'    },  // Light Blue
+    queue_congestion:       { icon: 'alertTriangle', variant: 'warning' },  // Orange
+    shift_summary:          { icon: 'barChart',      variant: 'purple'  },  // Purple
+    operator_offline:       { icon: 'wifiOff',       variant: 'danger'  },  // Red
+
+    // Owner — admin
+    station_suspended:      { icon: 'ban',           variant: 'danger'  },  // Dark Red
+
+    // Owner — gas/booking
+    gas_turned_off:         { icon: 'alertTriangle', variant: 'danger'  },
+    gas_turned_on:          { icon: 'checkCircle',   variant: 'success' },
+    station_booking_off:    { icon: 'ban',           variant: 'warning' },
+    station_booking_on:     { icon: 'checkCircle',   variant: 'success' },
+    queue_backlog_alert:    { icon: 'alertTriangle', variant: 'danger'  },
+
+    // Admin
+    system_alert:           { icon: 'shield',        variant: 'danger'  },
 };
 
 const getMeta = (type) => TYPE_META[type] ?? { icon: 'bell', variant: 'info' };

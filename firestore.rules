@@ -178,22 +178,36 @@ service cloud.firestore {
 
       // UPDATE:
       //   Customer → can only cancel or check-in their own booking
+      //   Customer → can shift queuePosition on ANY booking (needed for
+      //              cancellation re-index writeBatch — only positional fields)
       //   Operator/Admin → can update status fields (fueling, complete, skip, no-show)
       allow update: if
         // Customer cancels or checks in their own booking
         (isAuth()
           && resource.data.customerId == request.auth.uid
           && onlyCustomerFields())
+        // Customer re-indexes sibling bookings after cancellation:
+        //   Only queuePosition + updatedAt are allowed — no status/customerId changes.
+        //   This is required because cancelBooking() uses a writeBatch that must
+        //   shift positions on other customers' bookings atomically.
+        || (isAuth() && onlyQueueReindex())
         // Operator or Admin updates queue status
         || isStaff();
 
       // DELETE: nobody deletes bookings (soft-delete via status field)
       allow delete: if false;
 
-      // Customer can only modify these fields
+      // Customer can only modify these fields on their own booking
       function onlyCustomerFields() {
         let allowed = ['status', 'isCheckedIn', 'checkedInAt', 'checkInLocation', 'updatedAt',
-                        'lanePosition', 'fuelingStartedAt'];
+                        'lanePosition', 'fuelingStartedAt', 'cancelledAt'];
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+      }
+
+      // Queue re-index after cancellation: only positional fields, no sensitive data
+      // Prevents abuse: cannot change status, customerId, vehicleNumber, stationId, etc.
+      function onlyQueueReindex() {
+        let allowed = ['queuePosition', 'updatedAt'];
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
       }
     }
@@ -238,11 +252,14 @@ service cloud.firestore {
         //   Only the owner of the UID bucket or admin can list their items
         allow list: if isOwner(userId) || isAdmin();
 
-        // CREATE: any authenticated user can write to their own bucket,
-        //   OR admin/staff can push notifications to any user's bucket
-        allow create: if isAdmin()
-          || isStaff()
-          || isOwner(userId);
+        // CREATE: any authenticated user can push to any user's notification bucket.
+        //   This is intentional — it enables:
+        //     - Operators notifying owners (NEXT button)
+        //     - Owners notifying operators (skip/complete)
+        //     - Customers notifying operators (GPS check-in)
+        //   All users have verified phone numbers; notification data is non-sensitive.
+        //   READ/UPDATE/DELETE remain strictly per-owner below.
+        allow create: if isAuth();
 
         // UPDATE: owner only — e.g., marking as read
         allow update: if isOwner(userId) && onlyMarkingRead();

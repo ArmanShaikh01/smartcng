@@ -1,4 +1,9 @@
 // Operator queue management utilities
+//
+// KEY NOTE: All Firestore queries use ONLY ONE where clause (stationId or bookingId).
+// Firestore requires composite indexes for compound queries — since none are defined,
+// we fetch by a single field and filter everything else in JavaScript.
+//
 import {
     doc,
     updateDoc,
@@ -7,45 +12,66 @@ import {
     query,
     collection,
     where,
-    orderBy,
-    writeBatch,
     addDoc,
+    writeBatch,
     serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
-import { evaluateGate, GATE_END } from './gateLogic';
+import { evaluateGate, fetchActiveBookings } from './gateLogic';
+
+// ─── Helper: fetch station doc by stationId field ────────────────────────────
+const fetchStationDoc = async (stationId) => {
+    const snap = await getDocs(
+        query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', stationId))
+    );
+    if (snap.empty) return null;
+    return { docId: snap.docs[0].id, ...snap.docs[0].data() };
+};
+
+// ─── Helper: get owner UID for a station (checks station doc first, then users)
+const fetchOwnerOfStation = async (stationId, stationDocOwnerId) => {
+    // Fast path: already have it from station doc
+    if (stationDocOwnerId) return stationDocOwnerId;
+    // Slow path: query users collection for owner with this stationId
+    try {
+        const snap = await getDocs(
+            query(collection(db, COLLECTIONS.USERS), where('stationId', '==', stationId))
+        );
+        const ownerDoc = snap.docs.find(d => d.data().role === 'owner');
+        return ownerDoc ? (ownerDoc.data().userId || ownerDoc.id) : null;
+    } catch { return null; }
+};
+
+// ─── Helper: get all operator UIDs for a station (checks station doc first, then users)
+const fetchOperatorsOfStation = async (stationId, stationDocOperatorIds) => {
+    // Fast path: already have it from station doc
+    if (stationDocOperatorIds && stationDocOperatorIds.length > 0) return stationDocOperatorIds;
+    // Slow path: query users collection
+    try {
+        const snap = await getDocs(
+            query(collection(db, COLLECTIONS.USERS), where('stationId', '==', stationId))
+        );
+        return snap.docs
+            .filter(d => d.data().role === 'operator')
+            .map(d => d.data().userId || d.id);
+    } catch { return []; }
+};
 
 /**
  * Toggle station gas status
- * @param {string} stationId - Station ID (field value, not document ID)
- * @param {boolean} gasOn - New gas status
- * @param {string} operatorId - Operator user ID
- * @returns {Promise<{success: boolean}>}
  */
 export const toggleGasStatus = async (stationId, gasOn, operatorId) => {
     try {
-        // Find station by stationId field
-        const stationQuery = query(
-            collection(db, COLLECTIONS.STATIONS),
-            where('stationId', '==', stationId)
-        );
-        const stationSnapshot = await getDocs(stationQuery);
+        const station = await fetchStationDoc(stationId);
+        if (!station) return { success: false, error: 'Station not found' };
 
-        if (stationSnapshot.empty) {
-            return { success: false, error: 'Station not found' };
-        }
-
-        const stationDocId = stationSnapshot.docs[0].id;
-        const stationRef = doc(db, COLLECTIONS.STATIONS, stationDocId);
-
-        await updateDoc(stationRef, {
+        await updateDoc(doc(db, COLLECTIONS.STATIONS, station.docId), {
             gasOn,
             updatedAt: serverTimestamp()
         });
 
-        // Log action
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             stationId,
             action: gasOn ? 'gas_turned_on' : 'gas_turned_off',
@@ -54,29 +80,22 @@ export const toggleGasStatus = async (stationId, gasOn, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // ── Notifications for gas status change ─────────────────────────────
-        const ownerData = stationSnapshot.docs[0].data();
         if (!gasOn) {
-            // Gas turned OFF → notify owner
-            if (ownerData.ownerId) {
-                await createNotification(
-                    ownerData.ownerId,
-                    NOTIF_TYPE.GAS_TURNED_OFF,
+            const ownerId = await fetchOwnerOfStation(stationId, station.ownerId);
+            if (ownerId) {
+                await createNotification(ownerId, NOTIF_TYPE.GAS_TURNED_OFF,
                     '⚠️ Gas Supply Turned OFF',
                     `Gas has been turned OFF at station ${stationId}. New bookings are blocked.`,
                     { stationId, operatorId }
                 );
             }
         } else {
-            // Gas turned ON → notify owner + all operators at this station
-            const notifyTargets = [];
-            if (ownerData.ownerId) notifyTargets.push(ownerData.ownerId);
-            const operatorIds = ownerData.operatorIds || [];
-            operatorIds.forEach(uid => { if (uid !== operatorId) notifyTargets.push(uid); });
-            await Promise.all(notifyTargets.map(uid =>
-                createNotification(
-                    uid,
-                    NOTIF_TYPE.GAS_TURNED_ON,
+            const ownerId = await fetchOwnerOfStation(stationId, station.ownerId);
+            const opIds   = await fetchOperatorsOfStation(stationId, station.operatorIds);
+            const targets = [...new Set([ownerId, ...opIds].filter(Boolean))];
+            targets.forEach(uid => { if (uid === operatorId) targets.splice(targets.indexOf(uid), 1); });
+            await Promise.all(targets.map(uid =>
+                createNotification(uid, NOTIF_TYPE.GAS_TURNED_ON,
                     '✅ Gas Supply Restored',
                     `Gas is back ON at station ${stationId}. Fueling operations resumed.`,
                     { stationId, operatorId }
@@ -93,33 +112,17 @@ export const toggleGasStatus = async (stationId, gasOn, operatorId) => {
 
 /**
  * Toggle station booking status
- * @param {string} stationId - Station ID (field value, not document ID)
- * @param {boolean} bookingOn - New booking status
- * @param {string} operatorId - Operator user ID
- * @returns {Promise<{success: boolean}>}
  */
 export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
     try {
-        // Find station by stationId field
-        const stationQuery = query(
-            collection(db, COLLECTIONS.STATIONS),
-            where('stationId', '==', stationId)
-        );
-        const stationSnapshot = await getDocs(stationQuery);
+        const station = await fetchStationDoc(stationId);
+        if (!station) return { success: false, error: 'Station not found' };
 
-        if (stationSnapshot.empty) {
-            return { success: false, error: 'Station not found' };
-        }
-
-        const stationDocId = stationSnapshot.docs[0].id;
-        const stationRef = doc(db, COLLECTIONS.STATIONS, stationDocId);
-
-        await updateDoc(stationRef, {
+        await updateDoc(doc(db, COLLECTIONS.STATIONS, station.docId), {
             bookingOn,
             updatedAt: serverTimestamp()
         });
 
-        // Log action
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             stationId,
             action: bookingOn ? 'booking_opened' : 'booking_closed',
@@ -128,29 +131,29 @@ export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // ── Notifications for booking status change ──────────────────────────
-        const ownerData2 = stationSnapshot.docs[0].data();
         if (!bookingOn) {
-            // Booking closed → notify owner
-            if (ownerData2.ownerId) {
-                await createNotification(
-                    ownerData2.ownerId,
-                    NOTIF_TYPE.STATION_BOOKING_OFF,
+            if (station.ownerId) {
+                await createNotification(station.ownerId, NOTIF_TYPE.STATION_BOOKING_OFF,
                     '🚫 Booking Closed',
                     `Booking has been turned OFF at station ${stationId}. No new tokens will be issued.`,
                     { stationId, operatorId }
                 );
             }
+            // ── Notify all operators: booking is now closed ──────────────────
+            const allOperators = station.operatorIds || [];
+            await Promise.all(allOperators.map(uid =>
+                createNotification(uid, NOTIF_TYPE.BOOKING_CLOSED_ALERT,
+                    '🔒 System: Bookings OFF',
+                    'New bookings are now OFF. Finish current queue only.',
+                    { stationId }
+                )
+            ));
         } else {
-            // Booking opened → notify owner + all operators
-            const notifyTargets2 = [];
-            if (ownerData2.ownerId) notifyTargets2.push(ownerData2.ownerId);
-            const operatorIds2 = ownerData2.operatorIds || [];
-            operatorIds2.forEach(uid => { if (uid !== operatorId) notifyTargets2.push(uid); });
-            await Promise.all(notifyTargets2.map(uid =>
-                createNotification(
-                    uid,
-                    NOTIF_TYPE.STATION_BOOKING_ON,
+            const targets2 = [];
+            if (station.ownerId) targets2.push(station.ownerId);
+            (station.operatorIds || []).forEach(uid => { if (uid !== operatorId) targets2.push(uid); });
+            await Promise.all(targets2.map(uid =>
+                createNotification(uid, NOTIF_TYPE.STATION_BOOKING_ON,
                     '✅ Booking Opened',
                     `Booking is now OPEN at station ${stationId}. Customers can book tokens.`,
                     { stationId, operatorId }
@@ -166,39 +169,81 @@ export const toggleBookingStatus = async (stationId, bookingOn, operatorId) => {
 };
 
 /**
- * Advance queue - Mark current vehicle as completed and shift all positions
- * @param {string} stationId - Station ID
- * @param {string} operatorId - Operator user ID
- * @returns {Promise<{success: boolean, nextVehicle: string}>}
+ * Advance queue — Mark current vehicle as completed and shift all positions.
+ * Uses fetchActiveBookings (single where clause) to avoid composite index requirement.
  */
 export const advanceQueue = async (stationId, operatorId) => {
     try {
-        // Get current fueling vehicle
-        const currentBookingSnapshot = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', '==', 'fueling')
-            )
-        );
+        // Fetch all active bookings for this station (single where stationId)
+        const allActive = await fetchActiveBookings(stationId);
 
-        if (currentBookingSnapshot.empty) {
-            return { success: false, error: 'No vehicle currently fueling' };
+        // Find the fueling vehicle
+        let currentVehicle = allActive.find(b => b.status === 'fueling');
+
+        // Fallback: no fueling vehicle — look for checked_in at lowest position
+        if (!currentVehicle) {
+            const checkedIn = allActive
+                .filter(b => b.status === 'checked_in' || b.isCheckedIn === true)
+                .sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+
+            if (checkedIn.length === 0) {
+                return {
+                    success: false,
+                    error: 'No vehicle currently fueling or checked in. Please wait for a customer to check in first.'
+                };
+            }
+
+            // Promote first checked-in vehicle to fueling
+            currentVehicle = checkedIn[0];
+            await updateDoc(doc(db, COLLECTIONS.BOOKINGS, currentVehicle.id), {
+                status: 'fueling',
+                fuelingStartedAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
         }
 
-        const currentBooking = currentBookingSnapshot.docs[0];
-        const currentBookingId = currentBooking.id;
-        const currentVehicleNumber = currentBooking.data().vehicleNumber;
-        const completedCustId = currentBooking.data().customerId;
+        const currentBookingId = currentVehicle.id;
+        const currentVehicleNumber = currentVehicle.vehicleNumber;
+        const completedCustId = currentVehicle.customerId;
 
-        // Mark current booking as completed
-        await updateDoc(doc(db, COLLECTIONS.BOOKINGS, currentBookingId), {
+        // ── Remaining vehicles (completed one removed), already sorted by pos ─
+        const remaining = allActive.filter(b => b.id !== currentBookingId);
+
+        // ── Atomic writeBatch: complete current + re-index everyone else ───────
+        const wb = writeBatch(db);
+
+        // Mark current vehicle as completed
+        wb.update(doc(db, COLLECTIONS.BOOKINGS, currentBookingId), {
             status: 'completed',
             completedAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
 
-        // Log completion
+        // Re-assign position = index + 1 for every remaining vehicle
+        // Promote first checked-in vehicle at pos 1 to 'fueling'
+        let nextFuelingVehicleNumber = 'Queue empty';
+
+        remaining.forEach((booking, index) => {
+            const newPos = index + 1;
+            const updates = {
+                queuePosition: newPos,
+                updatedAt: serverTimestamp()
+            };
+
+            // First slot is now free — promote if checked-in
+            if (newPos === 1 && (booking.status === 'checked_in' || booking.isCheckedIn)) {
+                updates.status = 'fueling';
+                updates.fuelingStartedAt = serverTimestamp();
+                nextFuelingVehicleNumber = booking.vehicleNumber;
+            }
+
+            wb.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), updates);
+        });
+
+        await wb.commit();
+        console.log(`[advanceQueue] ✅ Completed ${currentVehicleNumber}, re-indexed ${remaining.length} remaining.`);
+
+        // ── Log completion ────────────────────────────────────────────────────
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             stationId,
             bookingId: currentBookingId,
@@ -209,57 +254,61 @@ export const advanceQueue = async (stationId, operatorId) => {
             timestamp: serverTimestamp()
         });
 
-        // ── Notification: fueling completed ──
+        // ── Notify completed customer ─────────────────────────────────────────
         if (completedCustId) {
             await createNotification(
-                completedCustId,
-                NOTIF_TYPE.FUELING_COMPLETED,
+                completedCustId, NOTIF_TYPE.FUELING_COMPLETED,
                 '⛽ Fueling Completed!',
                 `Fueling for vehicle ${currentVehicleNumber} is complete. Thank you for using Smart CNG.`,
                 { stationId, vehicleNumber: currentVehicleNumber, bookingId: currentBookingId }
             );
         }
 
-        // ── Evaluate gate: shift positions, promote checked-in, notify batch ──
+        // ── Gate evaluation — best-effort for notifications & gate zone ───────
         await evaluateGate(stationId);
 
-        // Get updated state to find the new fueling vehicle
-        const updatedSnap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', '==', 'fueling')
-            )
+        // ── Update station served count ───────────────────────────────────────
+        const allStationSnap = await getDocs(
+            query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId))
         );
-        const nextVehicleNumber = updatedSnap.empty
-            ? 'Queue empty'
-            : updatedSnap.docs[0].data().vehicleNumber;
+        const completedCount = allStationSnap.docs.filter(d => d.data().status === 'completed').length;
 
-        // Update station stats
-        const stationQuery = query(
-            collection(db, COLLECTIONS.STATIONS),
-            where('stationId', '==', stationId)
-        );
-        const stationSnapshot = await getDocs(stationQuery);
-
-        if (!stationSnapshot.empty) {
-            const stationDocId = stationSnapshot.docs[0].id;
-            const stationRef = doc(db, COLLECTIONS.STATIONS, stationDocId);
-
-            await updateDoc(stationRef, {
-                totalVehiclesServed: (await getDocs(
-                    query(
-                        collection(db, COLLECTIONS.BOOKINGS),
-                        where('stationId', '==', stationId),
-                        where('status', '==', 'completed')
-                    )
-                )).size
+        const station = await fetchStationDoc(stationId);
+        if (station) {
+            await updateDoc(doc(db, COLLECTIONS.STATIONS, station.docId), {
+                totalVehiclesServed: completedCount,
+                updatedAt: serverTimestamp()
             });
+
+            // ── Notify owner: operator advanced queue ──────────────────────────
+            const ownerId = await fetchOwnerOfStation(stationId, station.ownerId);
+            console.log('[advanceQueue] ownerId for notification:', ownerId);
+            if (ownerId) {
+                await createNotification(
+                    ownerId,
+                    NOTIF_TYPE.OPERATOR_QUEUE_ADVANCE,
+                    '✅ Operator Activity',
+                    `Token #${currentVehicle.queuePosition} (${currentVehicleNumber}) called to pump by Operator.`,
+                    { stationId, vehicleNumber: currentVehicleNumber, bookingId: currentBookingId, operatorId }
+                );
+            }
+        } else {
+            // Station doc not found via stationId field — still try to get owner
+            const ownerId = await fetchOwnerOfStation(stationId, null);
+            if (ownerId) {
+                await createNotification(
+                    ownerId,
+                    NOTIF_TYPE.OPERATOR_QUEUE_ADVANCE,
+                    '✅ Operator Activity',
+                    `Token #${currentVehicle.queuePosition} (${currentVehicleNumber}) called to pump by Operator.`,
+                    { stationId, vehicleNumber: currentVehicleNumber, bookingId: currentBookingId, operatorId }
+                );
+            }
         }
 
         return {
             success: true,
-            nextVehicle: nextVehicleNumber,
+            nextVehicle: nextFuelingVehicleNumber,
             completedVehicle: currentVehicleNumber
         };
     } catch (error) {
@@ -269,16 +318,10 @@ export const advanceQueue = async (stationId, operatorId) => {
 };
 
 /**
- * Mark a vehicle as no-show — removes from queue and reorders remaining
- * @param {string} bookingId - Booking document ID
- * @param {string} vehicleNumber - Vehicle number (for logging)
- * @param {string} stationId - Station ID
- * @param {string} operatorId - Operator user ID
- * @returns {Promise<{success: boolean}>}
+ * Mark a vehicle as no-show
  */
 export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId) => {
     try {
-        // Mark booking as no_show
         await updateDoc(doc(db, COLLECTIONS.BOOKINGS, bookingId), {
             status: 'no_show',
             skippedAt: serverTimestamp(),
@@ -286,7 +329,6 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
             updatedAt: serverTimestamp()
         });
 
-        // Log the action
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             stationId,
             bookingId,
@@ -297,18 +339,14 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
             timestamp: serverTimestamp()
         });
 
-        // ── Evaluate gate: recompact positions, promote checked-in, notify batch ──
         await evaluateGate(stationId);
 
-        // ── Notification: no-show customer ──
-        const noShowBookingRef = doc(db, COLLECTIONS.BOOKINGS, bookingId);
-        const noShowSnap = await getDoc(noShowBookingRef);
+        // Notify customer
+        const noShowSnap = await getDoc(doc(db, COLLECTIONS.BOOKINGS, bookingId));
         if (noShowSnap.exists()) {
-            const noShowCustId = noShowSnap.data().customerId;
-            if (noShowCustId) {
-                await createNotification(
-                    noShowCustId,
-                    NOTIF_TYPE.BOOKING_NO_SHOW,
+            const custId = noShowSnap.data().customerId;
+            if (custId) {
+                await createNotification(custId, NOTIF_TYPE.BOOKING_NO_SHOW,
                     'No-Show Recorded',
                     `Vehicle ${vehicleNumber} was marked as no-show. Your token has been cancelled.`,
                     { stationId, bookingId, vehicleNumber }
@@ -324,14 +362,14 @@ export const markNoShow = async (bookingId, vehicleNumber, stationId, operatorId
 };
 
 /**
- * Skip a checked-in vehicle — moves it to the end of the checked-in group.
- * If skipCount reaches 3, auto-marks as no-show.
+ * Skip a vehicle — moves it to the end and re-indexes ALL positions atomically.
+ * Auto no-show after 3 skips.
  *
- * @param {string} bookingId - Booking document ID
- * @param {string} vehicleNumber - Vehicle number (for logging)
- * @param {string} stationId - Station ID
- * @param {string} operatorId - Operator user ID
- * @returns {Promise<{success: boolean}>}
+ * Re-indexing logic:
+ *   1. Fetch all active bookings, sorted by current queuePosition.
+ *   2. Remove the skipped vehicle from the list.
+ *   3. Append the skipped vehicle at the end.
+ *   4. Assign position = index + 1 to every booking in one writeBatch.
  */
 export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorId) => {
     try {
@@ -345,39 +383,51 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
         const bookingData = bookingSnap.data();
         const newSkipCount = (bookingData.skipCount || 0) + 1;
 
-        // If skipped 3 times → auto no-show
+        // Auto no-show after 3 skips
         if (newSkipCount >= 3) {
             return await markNoShow(bookingId, vehicleNumber, stationId, operatorId);
         }
 
-        // Find max queue position to push this vehicle to end
-        const activeSnap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
-                orderBy('queuePosition', 'asc')
-            )
-        );
-        const maxPos = activeSnap.empty
-            ? 1
-            : Math.max(...activeSnap.docs.map(d => d.data().queuePosition || 0));
+        // ── Step 1: Fetch all active bookings sorted by position ──────────────
+        const allActive = await fetchActiveBookings(stationId); // already sorted by queuePosition
 
-        // Push the skipped booking to the very end
-        await updateDoc(bookingRef, {
-            isCheckedIn: false,
-            checkedInAt: null,
-            checkInLocation: null,
-            status: 'waiting',
-            queuePosition: maxPos + 1,
-            skipCount: newSkipCount,
-            skippedAt: serverTimestamp(),
-            skipReason: 'operator_skip',
-            gateNotifiedAt: null,
-            updatedAt: serverTimestamp()
+        // ── Step 2: Split into [others] + [skipped] ───────────────────────────
+        const others = allActive.filter(b => b.id !== bookingId);
+        // If this vehicle is the only one in the queue, nothing to shift — just reset it
+        const reordered = others.length === 0
+            ? [allActive.find(b => b.id === bookingId)] // stays at pos 1
+            : [...others, allActive.find(b => b.id === bookingId)]; // move to end
+
+        // ── Step 3: Atomic batch — re-assign position = index + 1 for all ────
+        const wb = writeBatch(db);
+        reordered.forEach((booking, index) => {
+            const newPos = index + 1;
+            const isSkipped = booking.id === bookingId;
+
+            const updates = {
+                queuePosition: newPos,
+                updatedAt: serverTimestamp()
+            };
+
+            if (isSkipped) {
+                // Reset check-in state and mark as waiting
+                updates.isCheckedIn = false;
+                updates.checkedInAt = null;
+                updates.checkInLocation = null;
+                updates.status = 'waiting';
+                updates.skipCount = newSkipCount;
+                updates.skippedAt = serverTimestamp();
+                updates.skipReason = 'operator_skip';
+                updates.gateNotifiedAt = null;
+            }
+
+            wb.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), updates);
         });
 
-        // Log the skip
+        await wb.commit();
+        console.log(`[skipVehicle] ✅ Skipped ${vehicleNumber}, re-indexed ${reordered.length} bookings.`);
+
+        // ── Step 4: Log the skip ──────────────────────────────────────────────
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             stationId,
             bookingId,
@@ -389,17 +439,30 @@ export const skipVehicle = async (bookingId, vehicleNumber, stationId, operatorI
             metadata: { skipCount: newSkipCount }
         });
 
-        // Evaluate gate: recompact positions, promote, notify batch
+        // ── Step 5: Run gate evaluation for status promotions & notifications ─
         await evaluateGate(stationId);
 
-        // Notify customer
+        // ── Step 6: Notify customer ───────────────────────────────────────────
         if (bookingData.customerId) {
             await createNotification(
-                bookingData.customerId,
-                NOTIF_TYPE.VEHICLE_SKIPPED,
+                bookingData.customerId, NOTIF_TYPE.VEHICLE_SKIPPED,
                 '⚠️ Vehicle Skipped',
                 `Your vehicle ${vehicleNumber} was skipped (${newSkipCount}/3). Check in again when you're at the pump.`,
                 { stationId, bookingId, vehicleNumber, skipCount: newSkipCount }
+            );
+        }
+
+        // ── Step 7: Notify owner that operator skipped ────────────────────────
+        const skipStation = await fetchStationDoc(stationId);
+        const skipOwnerId = await fetchOwnerOfStation(stationId, skipStation?.ownerId);
+        console.log('[skipVehicle] ownerId for notification:', skipOwnerId);
+        if (skipOwnerId) {
+            await createNotification(
+                skipOwnerId,
+                NOTIF_TYPE.OPERATOR_QUEUE_ADVANCE,
+                '⏭️ Operator Activity: Skip',
+                `Token for ${vehicleNumber} skipped by Operator (${newSkipCount}/3). Queue recompacted.`,
+                { stationId, bookingId, vehicleNumber, skipCount: newSkipCount, operatorId }
             );
         }
 

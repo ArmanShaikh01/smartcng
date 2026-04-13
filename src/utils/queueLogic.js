@@ -45,16 +45,17 @@ export const validateBooking = async (stationId, vehicleNumber) => {
             return { valid: false, error: 'Booking is currently closed.' };
         }
 
-        // Rule 3: No duplicate active booking for this vehicle
-        const existingBooking = await getDocs(
+        // Rule 3: No duplicate active booking for this vehicle (single where, filter in JS)
+        const existingBookingSnap = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
-                where('vehicleNumber', '==', vehicleNumber),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling'])
+                where('vehicleNumber', '==', vehicleNumber)
             )
         );
+        const activeStatuses = ['waiting', 'eligible', 'checked_in', 'fueling'];
+        const hasActiveBooking = existingBookingSnap.docs.some(d => activeStatuses.includes(d.data().status));
 
-        if (!existingBooking.empty) {
+        if (hasActiveBooking) {
             return { valid: false, error: 'This vehicle already has an active booking.' };
         }
 
@@ -75,16 +76,16 @@ export const validateBooking = async (stationId, vehicleNumber) => {
  */
 export const createBooking = async (stationId, vehicleNumber, customerId, customerPhone) => {
     try {
-        // Get current queue length
+        // Get current queue length (single where, filter in JS)
         const queueSnapshot = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling'])
+                where('stationId', '==', stationId)
             )
         );
-
-        const newPosition = queueSnapshot.size + 1;
+        const activeStatuses2 = ['waiting', 'eligible', 'checked_in', 'fueling'];
+        const activeCount = queueSnapshot.docs.filter(d => activeStatuses2.includes(d.data().status)).length;
+        const newPosition = activeCount + 1;
         const estimatedWaitMinutes = (newPosition - 1) * 3; // 3 min per vehicle
 
         const bookingData = {
@@ -157,36 +158,98 @@ export const createBooking = async (stationId, vehicleNumber, customerId, custom
 };
 
 /**
- * Cancel a booking
- * @param {string} bookingId - Booking ID
- * @param {string} customerId - Customer user ID
+ * Cancel a booking — atomically marks as cancelled AND re-indexes all
+ * remaining vehicles in one writeBatch so positions shift immediately.
+ *
+ * WHY a writeBatch instead of updateDoc → evaluateGate:
+ *   evaluateGate calls fetchActiveBookings (getDocs) right after the
+ *   updateDoc. Firestore's eventual-consistency model can return the
+ *   pre-cancel snapshot, so the cancelled vehicle is still counted and
+ *   positions are never shifted. One atomic batch eliminates this race.
+ *
+ * @param {string} bookingId  — Booking ID to cancel
+ * @param {string} customerId — Customer user ID (for logs & notifications)
+ * @param {string} stationId  — Station ID (needed for queue re-index)
  * @returns {Promise<{success: boolean}>}
  */
-export const cancelBooking = async (bookingId, customerId) => {
+export const cancelBooking = async (bookingId, customerId, stationId) => {
     try {
         const bookingRef = doc(db, COLLECTIONS.BOOKINGS, bookingId);
 
-        await updateDoc(bookingRef, {
+        // ── Resolve stationId from the doc if it wasn't passed ─────────────
+        let resolvedStationId = stationId;
+        if (!resolvedStationId) {
+            const snap = await getDoc(bookingRef);
+            resolvedStationId = snap.exists() ? snap.data().stationId : null;
+        }
+
+        // ── Fetch all currently-active bookings for this station ───────────
+        // (Single where clause — no composite index required)
+        const ACTIVE = ['waiting', 'eligible', 'checked_in', 'fueling'];
+        let remaining = [];
+        if (resolvedStationId) {
+            const queueSnap = await getDocs(
+                query(
+                    collection(db, COLLECTIONS.BOOKINGS),
+                    where('stationId', '==', resolvedStationId)
+                )
+            );
+            remaining = queueSnap.docs
+                .map(d => ({ id: d.id, ...d.data() }))
+                // Exclude the booking being cancelled AND any other non-active ones
+                .filter(b => b.id !== bookingId && ACTIVE.includes(b.status))
+                // Sort by current position to preserve relative order
+                .sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+        }
+
+        // ── Atomic writeBatch: cancel + re-index in one commit ─────────────
+        const wb = writeBatch(db);
+
+        // 1. Mark the target booking as cancelled
+        wb.update(bookingRef, {
             status: 'cancelled',
+            cancelledAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
 
-        // Log cancellation
+        // 2. Re-assign position = index + 1 for every remaining vehicle
+        //    (.map over sorted remaining → gap-fill starting from #1)
+        remaining.forEach((booking, index) => {
+            const newPos = index + 1;
+            wb.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), {
+                queuePosition: newPos,
+                updatedAt: serverTimestamp()
+            });
+        });
+
+        await wb.commit();
+        console.log(
+            `[cancelBooking] ✅ Cancelled ${bookingId}, re-indexed ${remaining.length} remaining vehicles.`
+        );
+
+        // ── Log cancellation ───────────────────────────────────────────────
         await addDoc(collection(db, COLLECTIONS.QUEUE_LOGS), {
             bookingId,
+            stationId: resolvedStationId || '',
             action: 'cancelled',
             performedBy: customerId,
             performedByRole: 'customer',
             timestamp: serverTimestamp()
         });
 
-        // ── Notification: booking cancelled ──────────────────────────────
+        // ── Run gate evaluation for status promotions & gate notifications ─
+        // (evaluateGate now sees the already-committed, correct positions)
+        if (resolvedStationId) {
+            await evaluateGate(resolvedStationId);
+        }
+
+        // ── Notification: booking cancelled ───────────────────────────────
         await createNotification(
             customerId,
             NOTIF_TYPE.BOOKING_CANCELLED,
-            'Booking Cancelled',
+            '🗑️ Booking Cancelled',
             'Your token has been cancelled. You can book a new token anytime.',
-            { bookingId }
+            { bookingId, stationId: resolvedStationId }
         );
 
         return { success: true };
@@ -243,6 +306,24 @@ export const checkInBooking = async (bookingId, location, customerId, stationId)
         // ── Evaluate gate (promote checked-in to top 10, auto-promote to 'fueling' if idle) ──
         await evaluateGate(resolvedStationId);
 
+        // ── Notify operators: new GPS check-in arrived ──────────────────────
+        const stationSnap = await getDocs(
+            query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', resolvedStationId))
+        );
+        if (!stationSnap.empty) {
+            const stationData = stationSnap.docs[0].data();
+            const operatorIds = stationData.operatorIds || [];
+            await Promise.all(operatorIds.map(opUid =>
+                createNotification(
+                    opUid,
+                    NOTIF_TYPE.GPS_CHECKIN_ALERT,
+                    '📍 Arrival: Vehicle Checked In',
+                    `Vehicle ${bookingData.vehicleNumber} is now at the station. Verified via GPS. (Position #${bookingData.queuePosition})`,
+                    { stationId: resolvedStationId, bookingId, vehicleNumber: bookingData.vehicleNumber }
+                )
+            ));
+        }
+
         // ── Notification: check-in confirmed ─────────────────────────────
         await createNotification(
             customerId,
@@ -269,20 +350,19 @@ export const getActiveBooking = async (customerId) => {
         const bookingsSnapshot = await getDocs(
             query(
                 collection(db, COLLECTIONS.BOOKINGS),
-                where('customerId', '==', customerId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling'])
+                where('customerId', '==', customerId)
             )
         );
 
-        if (bookingsSnapshot.empty) {
-            return null;
-        }
+        if (bookingsSnapshot.empty) return null;
 
-        const booking = bookingsSnapshot.docs[0];
-        return {
-            id: booking.id,
-            ...booking.data()
-        };
+        const activeStatuses3 = ['waiting', 'eligible', 'checked_in', 'fueling'];
+        const active = bookingsSnapshot.docs
+            .map(d => ({ id: d.id, ...d.data() }))
+            .filter(b => activeStatuses3.includes(b.status));
+
+        if (active.length === 0) return null;
+        return active[0];
     } catch (error) {
         console.error('Error getting active booking:', error);
         return null;

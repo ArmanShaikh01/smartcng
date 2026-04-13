@@ -6,7 +6,7 @@ import { confirm } from '../../utils/confirm';
 import Icon from '../shared/Icon';
 import './ControlPanel.css';
 
-const ControlPanel = ({ station, operatorId, onQueueAdvanced }) => {
+const ControlPanel = ({ station, operatorId, onQueueAdvanced, queue }) => {
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(null); // 'gas', 'booking', 'next'
 
@@ -47,7 +47,10 @@ const ControlPanel = ({ station, operatorId, onQueueAdvanced }) => {
         setActionLoading(null);
     };
 
-    const canAdvance = station.currentVehicleId !== null;
+    // Enable NEXT only if there's a fueling vehicle OR at least one checked-in vehicle physically present
+    const hasFuelingVehicle = station.currentVehicleId !== null;
+    const hasCheckedInVehicle = queue && queue.some(b => b.status === 'fueling' || b.status === 'checked_in' || b.isCheckedIn === true);
+    const canAdvance = hasFuelingVehicle || hasCheckedInVehicle;
 
     return (
         <div className="control-panel">

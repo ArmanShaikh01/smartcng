@@ -6,42 +6,37 @@
  *   estWaitMin  — estimated wait (minutes) if a new customer joins NOW
  *   loading     — true while first data loads
  *
- * Strategy:
- *   1. Firestore real-time listener on active bookings → queueCount
- *   2. One-time fetch of avg refill time from recent completed bookings
- *   3. estWaitMin = queueCount × avgRefillMin  (fallback: 3 min/vehicle)
+ * NOTE: Uses single where clause (stationId only) — Firestore requires
+ * composite indexes for compound queries. All filtering done in JS.
  */
 import { useState, useEffect, useRef } from 'react';
-import {
-    collection, query, where, onSnapshot, getDocs, Timestamp
-} from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
 
-const DEFAULT_MIN = 3; // fallback minutes per vehicle
-const AVG_CACHE = {}; // module-level cache to avoid re-fetching on every card
+const DEFAULT_MIN  = 3;
+const ACTIVE_STATUSES = ['waiting', 'eligible', 'checked_in', 'fueling'];
+const AVG_CACHE    = {};
 
+// Single where clause — no composite index needed
 const fetchAvgRefill = async (stationId) => {
     if (AVG_CACHE[stationId] !== undefined) return AVG_CACHE[stationId];
-
     try {
-        const since = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000); // last 7 days
+        const since = Date.now() - 7 * 24 * 60 * 60 * 1000;
         const snap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', '==', 'completed'),
-                where('completedAt', '>=', since)
-            )
+            query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId))
         );
 
         let total = 0, count = 0;
         snap.forEach(d => {
-            const { fuelingStartedAt, completedAt } = d.data();
-            if (fuelingStartedAt?.toMillis && completedAt?.toMillis) {
-                const ms = completedAt.toMillis() - fuelingStartedAt.toMillis();
-                if (ms > 0 && ms < 30 * 60 * 1000) { total += ms; count++; }
-            }
+            const { status, fuelingStartedAt, completedAt } = d.data();
+            if (status !== 'completed') return;
+            const completedMs = completedAt?.toMillis?.() ?? completedAt?.seconds * 1000;
+            if (!completedMs || completedMs < since) return;
+            const startMs = fuelingStartedAt?.toMillis?.() ?? fuelingStartedAt?.seconds * 1000;
+            if (!startMs) return;
+            const ms = completedMs - startMs;
+            if (ms > 0 && ms < 30 * 60 * 1000) { total += ms; count++; }
         });
 
         const avg = count > 0
@@ -67,24 +62,25 @@ export const useStationQueue = (stationId) => {
         fetchAvgRefill(stationId).then(avg => { avgRef.current = avg; });
     }, [stationId]);
 
-    // Real-time listener for active queue
+    // Real-time listener — single stationId where clause, filter in JS
     useEffect(() => {
         if (!stationId) { setLoading(false); return; }
 
         const q = query(
             collection(db, COLLECTIONS.BOOKINGS),
-            where('stationId', '==', stationId),
-            where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling'])
+            where('stationId', '==', stationId)
         );
 
-        const unsub = onSnapshot(q, (snap) => {
-            const count = snap.size;
-            setQueueCount(count);
-            setEstWaitMin(count * avgRef.current);
-            setLoading(false);
-        }, () => {
-            setLoading(false);
-        });
+        const unsub = onSnapshot(
+            q,
+            (snap) => {
+                const count = snap.docs.filter(d => ACTIVE_STATUSES.includes(d.data().status)).length;
+                setQueueCount(count);
+                setEstWaitMin(count * avgRef.current);
+                setLoading(false);
+            },
+            () => { setLoading(false); }
+        );
 
         return () => unsub();
     }, [stationId]);

@@ -19,26 +19,26 @@ const Analytics = ({ stationId }) => {
     const fetchAnalytics = useCallback(async () => {
         if (!stationId) { setLoading(false); return; }
         try {
-            const [completedSnap, skippedSnap, cancelledSnap, queueSnap] = await Promise.all([
-                getDocs(query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId), where('status', '==', 'completed'))),
-                getDocs(query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId), where('status', '==', 'skipped'))),
-                getDocs(query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId), where('status', '==', 'cancelled'))),
-                getDocs(query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId), where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling'])))
-            ]);
+            // Single query — filter all statuses in JS (no composite index needed)
+            const allSnap = await getDocs(
+                query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId))
+            );
+            const all = allSnap.docs.map(d => d.data());
 
-            const today = new Date(); today.setHours(0, 0, 0, 0);
-            const todayServed = completedSnap.docs.filter(d => {
-                const t = d.data().completedAt?.toDate();
+            const ACTIVE = ['waiting', 'eligible', 'checked_in', 'fueling'];
+            const today  = new Date(); today.setHours(0, 0, 0, 0);
+
+            const totalServed    = all.filter(b => b.status === 'completed').length;
+            const totalSkipped   = all.filter(b => b.status === 'skipped' || b.status === 'no_show').length;
+            const totalCancelled = all.filter(b => b.status === 'cancelled').length;
+            const currentQueue   = all.filter(b => ACTIVE.includes(b.status)).length;
+            const todayServed    = all.filter(b => {
+                if (b.status !== 'completed') return false;
+                const t = b.completedAt?.toDate?.();
                 return t && t >= today;
             }).length;
 
-            setStats({
-                totalServed: completedSnap.size,
-                totalSkipped: skippedSnap.size,
-                totalCancelled: cancelledSnap.size,
-                currentQueue: queueSnap.size,
-                todayServed
-            });
+            setStats({ totalServed, totalSkipped, totalCancelled, currentQueue, todayServed });
             setLoading(false);
         } catch (err) {
             console.error('Error fetching analytics:', err);

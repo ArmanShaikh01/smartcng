@@ -183,6 +183,22 @@ const icons = {
         <path strokeLinecap="round" strokeLinejoin="round"
             d="M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01" />
     ),
+    wifiOff: (
+        <path strokeLinecap="round" strokeLinejoin="round"
+            d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0119 12.55M5 12.55a10.94 10.94 0 015.17-2.39M10.71 5.05A16 16 0 0122.56 9M1.42 9a15.91 15.91 0 014.7-2.88M8.53 16.11a6 6 0 016.95 0M12 20h.01" />
+    ),
+    lock: (
+        <path strokeLinecap="round" strokeLinejoin="round"
+            d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4" />
+    ),
+    userPlus: (
+        <path strokeLinecap="round" strokeLinejoin="round"
+            d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 11a4 4 0 100-8 4 4 0 000 8zM20 8v6M23 11h-6" />
+    ),
+    userMinus: (
+        <path strokeLinecap="round" strokeLinejoin="round"
+            d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M8.5 11a4 4 0 100-8 4 4 0 000 8zM23 11h-6" />
+    ),
     suspend: (
         <>
             <circle cx="12" cy="12" r="10" />

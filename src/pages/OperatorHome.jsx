@@ -90,6 +90,7 @@ const OperatorHome = () => {
                     station={station}
                     operatorId={user.uid}
                     onQueueAdvanced={handleQueueAdvanced}
+                    queue={queue}
                 />
 
                 <AwarenessPanel

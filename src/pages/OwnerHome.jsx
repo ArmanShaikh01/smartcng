@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useRealtimeStation } from '../hooks/useRealtimeStation';
 import { useRealtimeQueue } from '../hooks/useRealtimeQueue';
+import { useOwnerMonitoring } from '../hooks/useOwnerMonitoring';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
@@ -25,7 +26,10 @@ const OwnerHome = () => {
     const [pendingComplaints, setPending] = useState(0);
 
     const { station, loading: stationLoading } = useRealtimeStation(stationId);
-    const { queue, loading: queueLoading } = useRealtimeQueue(stationId);
+    const { queue, loading: queueLoading }     = useRealtimeQueue(stationId);
+
+    // ── Owner monitoring: congestion, shift summary, operator offline ────────
+    useOwnerMonitoring(stationId, user?.uid, queue, station);
 
     // Live count of pending complaints for badge
     useEffect(() => {

@@ -26,40 +26,55 @@ const itemsRef = (userId) =>
 // ─── Notification Types ─────────────────────────────────────────────────────
 export const NOTIF_TYPE = {
     // Customer
-    BOOKING_CONFIRMED: 'booking_confirmed',
-    BOOKING_CANCELLED: 'booking_cancelled',
-    BOOKING_NO_SHOW: 'booking_no_show',
+    BOOKING_CONFIRMED:      'booking_confirmed',
+    BOOKING_CANCELLED:      'booking_cancelled',
+    BOOKING_NO_SHOW:        'booking_no_show',
     QUEUE_POSITION_UPDATED: 'queue_position_updated',
-    TURN_ARRIVED: 'turn_arrived',
-    TURN_SOON: 'turn_soon',
-    FUELING_COMPLETED: 'fueling_completed',
+    TURN_ARRIVED:           'turn_arrived',
+    TURN_SOON:              'turn_soon',
+    FUELING_COMPLETED:      'fueling_completed',
 
     // Customer — check-in flow
-    CHECK_IN_REMINDER: 'check_in_reminder',
-    CHECKED_IN_OK: 'checked_in_ok',
+    CHECK_IN_REMINDER:      'check_in_reminder',
+    CHECKED_IN_OK:          'checked_in_ok',
 
     // Customer — lane-priority
-    PRE_ARRIVAL_ALERT: 'pre_arrival_alert',
-    CHECK_IN_EXPIRED: 'check_in_expired',
-    VEHICLE_SKIPPED: 'vehicle_skipped',
-    LANE_OVERTAKEN: 'lane_overtaken',
+    PRE_ARRIVAL_ALERT:      'pre_arrival_alert',
+    CHECK_IN_EXPIRED:       'check_in_expired',
+    VEHICLE_SKIPPED:        'vehicle_skipped',
+    LANE_OVERTAKEN:         'lane_overtaken',
 
     // Operator
-    BOOKING_CLOSED: 'booking_closed',
-    QUEUE_ALERT: 'queue_alert',
-    OPERATOR_ADDED: 'operator_added',
-    OPERATOR_REMOVED: 'operator_removed',
-    OPERATOR_INACTIVE: 'operator_inactive',
+    BOOKING_CLOSED:         'booking_closed',
+    QUEUE_ALERT:            'queue_alert',
+    OPERATOR_ADDED:         'operator_added',
+    OPERATOR_REMOVED:       'operator_removed',
+    OPERATOR_INACTIVE:      'operator_inactive',
 
-    // Owner
-    GAS_TURNED_OFF: 'gas_turned_off',
-    GAS_TURNED_ON: 'gas_turned_on',
-    STATION_BOOKING_OFF: 'station_booking_off',
-    STATION_BOOKING_ON: 'station_booking_on',
-    QUEUE_BACKLOG_ALERT: 'queue_backlog_alert',
+    // Operator — owner action alerts
+    OWNER_COMPLETED_TOKEN:  'owner_completed_token',
+    OWNER_SKIPPED_TOKEN:    'owner_skipped_token',
+    GPS_CHECKIN_ALERT:      'gps_checkin_alert',
+    BOOKING_CLOSED_ALERT:   'booking_closed_alert',
+
+    // Owner — operator monitoring
+    OPERATOR_QUEUE_ADVANCE: 'operator_queue_advance',
+    QUEUE_CONGESTION:       'queue_congestion',
+    SHIFT_SUMMARY:          'shift_summary',
+    OPERATOR_OFFLINE:       'operator_offline',
+
+    // Owner — admin events
+    STATION_SUSPENDED:      'station_suspended',
+
+    // Owner — gas/booking
+    GAS_TURNED_OFF:         'gas_turned_off',
+    GAS_TURNED_ON:          'gas_turned_on',
+    STATION_BOOKING_OFF:    'station_booking_off',
+    STATION_BOOKING_ON:     'station_booking_on',
+    QUEUE_BACKLOG_ALERT:    'queue_backlog_alert',
 
     // Admin (reserved for future use)
-    SYSTEM_ALERT: 'system_alert',
+    SYSTEM_ALERT:           'system_alert',
 };
 
 /**
@@ -72,8 +87,10 @@ export const NOTIF_TYPE = {
  * @param {object}  metadata — { stationId, bookingId, vehicleNumber, ... }
  */
 export const createNotification = async (userId, type, title, message, metadata = {}) => {
-    if (!userId) return;   // safety guard — never write without a target
-
+    if (!userId) {
+        console.warn('[Notifications] ⚠️ createNotification called with null/undefined userId — skipped.', { type, title });
+        return;
+    }
     try {
         await addDoc(itemsRef(userId), {
             type,
@@ -83,9 +100,10 @@ export const createNotification = async (userId, type, title, message, metadata 
             read: false,
             createdAt: serverTimestamp()
         });
+        console.log(`[Notifications] ✅ Sent "${type}" to ${userId}`);
     } catch (err) {
-        // Fail silently — a missing notification must never break the main flow
-        console.warn('[Notifications] Failed to write notification:', err.message);
+        // Log clearly — a missing notification must never break the main flow
+        console.error('[Notifications] ❌ Failed to write notification:', err.message, { userId, type, title });
     }
 };
 

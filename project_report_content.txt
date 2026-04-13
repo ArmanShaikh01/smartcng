@@ -1,0 +1,52 @@
+ACKNOWLEDGEMENT
+
+At the outset we would like to acknowledge our grateful thanks to our guide Mr. T.L. Patil from the Department of Computer Engineering for his valuable guidance and suggestions regarding our project entitled "Dynamic Queue Optimization and Real-Time ETA Prediction System for Smart CNG Stations".
+
+We would like to express our thanks to Prof. Mr. Patil T.L., Head of the Department of Computer Engineering, for their great moral support.
+
+We are thankful to Prof. M.A. Chougule, Honorable Principal, A.G. Patil Polytechnic Institute, Solapur, for providing necessary facilities for the completion of this work.
+
+Last but not least, we would like to thank all our staff and friends for their keen advice and support.
+
+
+Thank you.
+
+
+Mr. Shaikh Arman Bandu
+Mr. Bagale Anand Kallappa
+Ms. Salgare Shubham Dinesh
+Mr. Shaikh M Saad
+
+
+================================================================================
+
+
+ABSTRACT
+
+The rapid adoption of Compressed Natural Gas (CNG) as a vehicle fuel has led to increasing congestion and unpredictable wait times at CNG fueling stations. Existing systems lack real-time queue visibility, leading to customer frustration and inefficient station operations.
+
+This project presents a Dynamic Queue Optimization and Real-Time ETA Prediction System for Smart CNG Stations — a web-based Progressive Web Application (PWA) built using React.js and Firebase. The system enables customers to book their slot at a nearby CNG station, view their real-time position in the queue, and receive an accurate Estimated Time of Arrival (ETA) for fueling.
+
+A batch-based First-Come, First-Served (FCFS) gate queue mechanism is implemented, ensuring continuous pump utilization and fair, transparent check-in windows for all vehicles. Station operators are provided with a dedicated dashboard to manage the queue, mark vehicles as fueling or completed, and handle check-ins efficiently. Station owners and administrators can monitor station performance and manage operations remotely.
+
+Key features include OTP-based Firebase authentication, real-time Firestore synchronization for live queue updates, geolocation-based station discovery, and a responsive, mobile-first UI with skeleton loading for an enhanced user experience. The system eliminates manual queue tracking, reduces customer wait times, and optimizes station throughput — making CNG fueling smarter, faster, and more transparent.
+
+
+================================================================================
+
+
+INTRODUCTION
+
+A. System References
+
+Compressed Natural Gas (CNG) has emerged as one of the most popular alternative fuels for vehicles due to its cost-effectiveness and lower environmental impact compared to traditional fuels like petrol and diesel. With the growing number of CNG-powered vehicles on Indian roads, the demand at CNG fueling stations has increased significantly, leading to long queues, unpredictable wait times, and overall customer dissatisfaction.
+
+Currently, most CNG stations operate on a manual, first-come-first-served basis with no digital queue management. Customers have no visibility into how many vehicles are ahead of them, how long they will have to wait, or whether a nearby station has a shorter queue. This lack of real-time information results in wasted time, fuel consumption while idling in queues, and uneven load distribution across stations.
+
+A smart queue management system addresses these challenges by digitizing the entire fueling workflow — from booking a slot to completing the fueling process. It provides customers with real-time queue position tracking, accurate Estimated Time of Arrival (ETA) predictions, and the ability to discover and compare nearby stations based on distance, ratings, and current wait times.
+
+In order to streamline the queue management process and provide a transparent, efficient fueling experience, we have developed a web-based Progressive Web Application (PWA) using React.js and Firebase. The system implements a batch-based First-Come, First-Served (FCFS) gate queue mechanism that ensures continuous pump utilization while maintaining fairness for all customers. Real-time synchronization is achieved through Cloud Firestore, enabling live queue updates across all connected users — customers, station operators, and owners.
+
+The system features OTP-based authentication via Firebase for secure user onboarding, geolocation-based station discovery for finding the nearest stations, and a role-based dashboard system where operators can manage the queue, mark vehicles for fueling, and handle check-ins efficiently. Station owners and administrators can monitor station performance, manage operator assignments, and oversee operations remotely.
+
+A responsive, mobile-first UI with skeleton loading ensures a smooth and premium user experience across all devices. The application eliminates manual queue tracking, reduces customer wait times, optimizes station throughput, and brings transparency to the entire CNG fueling process — making it smarter, faster, and more efficient.

@@ -1,20 +1,21 @@
 // Gate-based queue logic — Batch notification & promotion system
-// Replaces laneLogic.js with a cleaner batch-based approach
 //
 // System:
-//   Top 10 (positions 1–10): Checked-in at station, served in booking order (FCFS)
-//   Gate   (positions 11–15): Batch notified, grace window, promoted when checked-in
-//   Outside (16+): Waiting for their batch notification
+//   Top 10 (positions 1–10): Station capacity
+//   Gate   (positions 11–15): Batch notified, promote when checked-in
+//   Outside (16+): Waiting
+//
+// KEY NOTE: All Firestore queries use ONLY ONE where clause (stationId).
+// Firestore requires composite indexes for compound queries — since none are
+// defined, we fetch by stationId only and filter/sort in JavaScript.
 //
 import {
     collection,
     query,
     where,
-    orderBy,
     getDocs,
     writeBatch,
     doc,
-    updateDoc,
     serverTimestamp,
     Timestamp
 } from 'firebase/firestore';
@@ -23,14 +24,16 @@ import { COLLECTIONS } from '../firebase/firestore';
 import { createNotification, NOTIF_TYPE } from '../firebase/notifications';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
-export const BATCH_SIZE = 5;               // Notify 5 vehicles at a time
-export const TOP_N = 10;                   // Station capacity (checked-in vehicles)
+export const BATCH_SIZE = 5;
+export const TOP_N = 10;
 export const GATE_START = TOP_N + 1;       // 11
 export const GATE_END = TOP_N + BATCH_SIZE; // 15
-const DEFAULT_REFILL_MIN = 3;              // Fallback minutes per vehicle
-const MAX_SKIP_COUNT = 3;                  // Auto no-show after 3 skips
+const DEFAULT_REFILL_MIN = 3;
+const MAX_SKIP_COUNT = 3;
 
-// ─── Helper: extract milliseconds from a Firestore timestamp ────────────────
+const ACTIVE_STATUSES = ['waiting', 'eligible', 'checked_in', 'fueling'];
+
+// ─── Helper: milliseconds from Firestore timestamp ──────────────────────────
 const toMillis = (ts) => {
     if (!ts) return null;
     if (typeof ts.toMillis === 'function') return ts.toMillis();
@@ -38,35 +41,43 @@ const toMillis = (ts) => {
     return null;
 };
 
-// ─── Avg refill time (for grace window calculation) ─────────────────────────
-const AVG_CACHE = {};
+// ─── Helper: fetch ALL bookings for a station, filter & sort in JS ──────────
+// Uses ONLY stationId in the query — no composite index required.
+export const fetchActiveBookings = async (stationId) => {
+    const snap = await getDocs(
+        query(
+            collection(db, COLLECTIONS.BOOKINGS),
+            where('stationId', '==', stationId)
+        )
+    );
+    return snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(b => ACTIVE_STATUSES.includes(b.status))
+        .sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+};
 
+// ─── Avg refill time ─────────────────────────────────────────────────────────
+const AVG_CACHE = {};
 const fetchAvgRefillMs = async (stationId) => {
     if (AVG_CACHE[stationId] !== undefined) return AVG_CACHE[stationId];
-
     try {
         const since = Timestamp.fromMillis(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        // Only one where clause — filter completed & date in JS
         const snap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', '==', 'completed'),
-                where('completedAt', '>=', since)
-            )
+            query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId))
         );
-
         let total = 0, count = 0;
         snap.forEach(d => {
-            const { fuelingStartedAt, completedAt } = d.data();
-            if (fuelingStartedAt?.toMillis && completedAt?.toMillis) {
-                const ms = completedAt.toMillis() - fuelingStartedAt.toMillis();
-                if (ms > 0 && ms < 30 * 60 * 1000) { total += ms; count++; }
-            }
+            const { status, fuelingStartedAt, completedAt } = d.data();
+            if (status !== 'completed') return;
+            const completedMs = toMillis(completedAt);
+            if (!completedMs || completedMs < since.toMillis()) return;
+            const startMs = toMillis(fuelingStartedAt);
+            if (!startMs) return;
+            const ms = completedMs - startMs;
+            if (ms > 0 && ms < 30 * 60 * 1000) { total += ms; count++; }
         });
-
-        const avg = count > 0
-            ? Math.max(60_000, total / count) // minimum 1 min
-            : DEFAULT_REFILL_MIN * 60_000;
+        const avg = count > 0 ? Math.max(60_000, total / count) : DEFAULT_REFILL_MIN * 60_000;
         AVG_CACHE[stationId] = avg;
         return avg;
     } catch {
@@ -75,27 +86,12 @@ const fetchAvgRefillMs = async (stationId) => {
     }
 };
 
-/**
- * Calculate grace duration (ms) for a batch.
- * Grace = BATCH_SIZE × avgRefillTime
- * This gives the batch enough time — roughly until the last person's ETA.
- *
- * @param {string} stationId
- * @returns {Promise<number>} grace duration in milliseconds
- */
 export const getGraceDurationMs = async (stationId) => {
     const avgMs = await fetchAvgRefillMs(stationId);
-    return BATCH_SIZE * avgMs; // e.g. 5 × 3 min = 15 min
+    return BATCH_SIZE * avgMs;
 };
 
-/**
- * Send batch notification to a group of vehicles (by position range).
- *
- * @param {Array}  bookings  — all active bookings (already fetched)
- * @param {number} startPos  — first position to notify (inclusive)
- * @param {number} endPos    — last position to notify (inclusive)
- * @param {string} stationId — for notification metadata
- */
+// ─── Send batch notification to gate zone ────────────────────────────────────
 export const notifyBatch = async (bookings, startPos, endPos, stationId) => {
     const batch = bookings.filter(
         b => b.queuePosition >= startPos
@@ -104,23 +100,15 @@ export const notifyBatch = async (bookings, startPos, endPos, stationId) => {
             && b.status !== 'checked_in'
             && b.status !== 'fueling'
     );
-
     await Promise.all(batch.map(b =>
         createNotification(
             b.customerId,
             NOTIF_TYPE.PRE_ARRIVAL_ALERT,
             '🚗 Your Turn is Approaching!',
             `You are #${b.queuePosition} in queue. Please head to the station and check-in now.`,
-            {
-                stationId,
-                bookingId: b.id,
-                vehicleNumber: b.vehicleNumber,
-                queuePosition: b.queuePosition
-            }
+            { stationId, bookingId: b.id, vehicleNumber: b.vehicleNumber, queuePosition: b.queuePosition }
         )
     ));
-
-    // Mark these bookings as notified (set notifiedAt timestamp)
     if (batch.length > 0) {
         const wb = writeBatch(db);
         batch.forEach(b => {
@@ -134,34 +122,16 @@ export const notifyBatch = async (bookings, startPos, endPos, stationId) => {
 };
 
 /**
- * Main gate evaluation — call after check-in, queue advance, skip, or no-show.
+ * Main gate evaluation — recompacts positions, promotes fueling, notifies batch.
+ * Called after: check-in, queue advance, skip, no-show.
  *
- * Logic:
- *   1. Fetch all active bookings sorted by queuePosition
- *   2. Count how many spots are available in top 10
- *   3. Among positions 11+, find checked-in vehicles (booking order)
- *   4. Promote them to fill open spots
- *   5. Expire vehicles in gate zone whose grace window has passed
- *   6. Recompact all positions (1, 2, 3, ...)
- *   7. Auto-promote position #1 to 'fueling' if no one is fueling & they're checked-in
- *   8. Notify next batch if needed
- *
- * @param {string} stationId — station ID (field value)
+ * IMPORTANT: Uses single-field Firestore queries only (stationId).
+ * All filtering and sorting is done in JavaScript.
  */
 export const evaluateGate = async (stationId) => {
     try {
-        const snap = await getDocs(
-            query(
-                collection(db, COLLECTIONS.BOOKINGS),
-                where('stationId', '==', stationId),
-                where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
-                orderBy('queuePosition', 'asc')
-            )
-        );
-
-        if (snap.empty) return;
-
-        let bookings = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        let bookings = await fetchActiveBookings(stationId);
+        if (bookings.length === 0) return;
 
         // ── Step 1: Expire gate-notified vehicles whose grace window passed ──
         const graceDuration = await getGraceDurationMs(stationId);
@@ -183,7 +153,6 @@ export const evaluateGate = async (stationId) => {
             }
         });
 
-        // Move expired vehicles to end of queue
         if (expiredIds.length > 0) {
             const maxPos = Math.max(...bookings.map(b => b.queuePosition));
             let offset = 1;
@@ -192,9 +161,7 @@ export const evaluateGate = async (stationId) => {
             expiredIds.forEach(id => {
                 const b = bookings.find(bk => bk.id === id);
                 const newSkipCount = (b.skipCount || 0) + 1;
-
                 if (newSkipCount >= MAX_SKIP_COUNT) {
-                    // Auto no-show (3 strikes)
                     expBatch.update(doc(db, COLLECTIONS.BOOKINGS, id), {
                         status: 'no_show',
                         skippedAt: serverTimestamp(),
@@ -203,16 +170,12 @@ export const evaluateGate = async (stationId) => {
                         gateNotifiedAt: null,
                         updatedAt: serverTimestamp()
                     });
-                    // Notify customer
-                    createNotification(
-                        b.customerId,
-                        NOTIF_TYPE.BOOKING_NO_SHOW,
+                    createNotification(b.customerId, NOTIF_TYPE.BOOKING_NO_SHOW,
                         '🚫 Booking Cancelled — No Show',
                         `Your booking for ${b.vehicleNumber} was cancelled after ${MAX_SKIP_COUNT} missed check-ins.`,
                         { stationId, bookingId: id, vehicleNumber: b.vehicleNumber }
                     );
                 } else {
-                    // Skip to end
                     expBatch.update(doc(db, COLLECTIONS.BOOKINGS, id), {
                         queuePosition: maxPos + offset,
                         status: 'waiting',
@@ -223,10 +186,7 @@ export const evaluateGate = async (stationId) => {
                         updatedAt: serverTimestamp()
                     });
                     offset++;
-                    // Notify customer
-                    createNotification(
-                        b.customerId,
-                        NOTIF_TYPE.VEHICLE_SKIPPED,
+                    createNotification(b.customerId, NOTIF_TYPE.VEHICLE_SKIPPED,
                         '⏭️ Turn Skipped — Check-in Expired',
                         `You didn't check-in in time. Vehicle ${b.vehicleNumber} moved to end of queue (${newSkipCount}/${MAX_SKIP_COUNT}).`,
                         { stationId, bookingId: id, vehicleNumber: b.vehicleNumber, skipCount: newSkipCount }
@@ -235,35 +195,25 @@ export const evaluateGate = async (stationId) => {
             });
 
             await expBatch.commit();
-
-            // Re-fetch bookings after expiry
-            const snap2 = await getDocs(
-                query(
-                    collection(db, COLLECTIONS.BOOKINGS),
-                    where('stationId', '==', stationId),
-                    where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
-                    orderBy('queuePosition', 'asc')
-                )
-            );
-            bookings = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+            // Re-fetch after expiry (single where clause)
+            bookings = await fetchActiveBookings(stationId);
         }
 
         if (bookings.length === 0) return;
 
-        // ── Step 2: Recompact positions (remove gaps) ───────────────────────
-        // Keep fueling at top, then checked_in by queuePosition, then eligible, then waiting
-        const fueling = bookings.filter(b => b.status === 'fueling');
+        // ── Step 2: Recompact — Priority: fueling → checked_in → eligible → waiting ──
+        const fueling   = bookings.filter(b => b.status === 'fueling');
         const checkedIn = bookings.filter(b => b.status === 'checked_in' || (b.isCheckedIn && b.status !== 'fueling'));
-        const rest = bookings.filter(b => b.status !== 'fueling' && b.status !== 'checked_in' && !b.isCheckedIn);
+        const eligible  = bookings.filter(b => b.status === 'eligible' && !b.isCheckedIn);
+        const waiting   = bookings.filter(b => b.status === 'waiting'  && !b.isCheckedIn);
 
-        // Checked-in sorted by booking order (queuePosition)
-        checkedIn.sort((a, b) => a.queuePosition - b.queuePosition);
-        // Rest sorted by booking order
-        rest.sort((a, b) => a.queuePosition - b.queuePosition);
+        checkedIn.sort((a, b) => (a.queuePosition || 0) - (b.queuePosition || 0));
+        eligible.sort((a, b)  => (a.queuePosition || 0) - (b.queuePosition || 0));
+        waiting.sort((a, b)   => (a.queuePosition || 0) - (b.queuePosition || 0));
 
-        const sorted = [...fueling, ...checkedIn, ...rest];
+        const sorted = [...fueling, ...checkedIn, ...eligible, ...waiting];
 
-        // ── Step 3: Assign compacted positions & determine statuses ─────────
+        // ── Step 3: Assign compacted positions & statuses ────────────────────
         const wb = writeBatch(db);
         let nextFuelingId = null;
         const hasFueling = fueling.length > 0;
@@ -273,14 +223,12 @@ export const evaluateGate = async (stationId) => {
             let newStatus;
 
             if (booking.status === 'fueling') {
-                // Keep fueling status
                 newStatus = 'fueling';
                 nextFuelingId = booking.id;
             } else if (!hasFueling && index === 0 && (booking.isCheckedIn || booking.status === 'checked_in')) {
-                // No one fueling & this is first checked-in → promote to fueling!
+                // First vehicle is checked-in and no one is fueling → promote to fueling
                 newStatus = 'fueling';
                 nextFuelingId = booking.id;
-                // Notify customer
                 createNotification(
                     booking.customerId,
                     NOTIF_TYPE.TURN_ARRIVED,
@@ -289,12 +237,10 @@ export const evaluateGate = async (stationId) => {
                     { stationId, vehicleNumber: booking.vehicleNumber, bookingId: booking.id }
                 );
             } else if (newPos <= GATE_END) {
-                // Positions 1–15: eligible zone (can check-in)
                 newStatus = (booking.isCheckedIn || booking.status === 'checked_in')
                     ? 'checked_in'
                     : 'eligible';
             } else {
-                // 16+: waiting
                 newStatus = 'waiting';
             }
 
@@ -304,13 +250,9 @@ export const evaluateGate = async (stationId) => {
                 estimatedWaitMinutes: (newPos - 1) * DEFAULT_REFILL_MIN,
                 updatedAt: serverTimestamp()
             };
-
-            // Set fuelingStartedAt if newly promoted to fueling
             if (newStatus === 'fueling' && booking.status !== 'fueling') {
                 updates.fuelingStartedAt = serverTimestamp();
             }
-
-            // Set eligibleAt if newly entering eligible zone
             if ((newStatus === 'eligible' || newStatus === 'checked_in') && !booking.eligibleAt) {
                 updates.eligibleAt = serverTimestamp();
             }
@@ -318,24 +260,21 @@ export const evaluateGate = async (stationId) => {
             wb.update(doc(db, COLLECTIONS.BOOKINGS, booking.id), updates);
         });
 
-        // ── Step 4: Update station document ─────────────────────────────────
-        const stationQuery = query(
-            collection(db, COLLECTIONS.STATIONS),
-            where('stationId', '==', stationId)
+        // ── Step 4: Update station document (single where clause) ────────────
+        const stationSnap = await getDocs(
+            query(collection(db, COLLECTIONS.STATIONS), where('stationId', '==', stationId))
         );
-        const stationSnapshot = await getDocs(stationQuery);
-        if (!stationSnapshot.empty) {
-            const stationDocId = stationSnapshot.docs[0].id;
-            wb.update(doc(db, COLLECTIONS.STATIONS, stationDocId), {
+        if (!stationSnap.empty) {
+            wb.update(doc(db, COLLECTIONS.STATIONS, stationSnap.docs[0].id), {
                 currentVehicleId: nextFuelingId || null,
                 updatedAt: serverTimestamp()
             });
         }
 
         await wb.commit();
+        console.log(`[evaluateGate] ✅ Compacted ${sorted.length} bookings for station ${stationId}`);
 
-        // ── Step 5: Send batch notification to gate zone (11–15) ────────────
-        // Only notify vehicles that haven't been notified yet
+        // ── Step 5: Notify gate zone (11–15) if needed ──────────────────────
         const gateVehicles = sorted.filter(
             b => b.queuePosition >= GATE_START
                 && b.queuePosition <= GATE_END
@@ -344,18 +283,8 @@ export const evaluateGate = async (stationId) => {
                 && b.status !== 'fueling'
                 && !b.gateNotifiedAt
         );
-
         if (gateVehicles.length > 0) {
-            // Re-fetch to get updated positions
-            const freshSnap = await getDocs(
-                query(
-                    collection(db, COLLECTIONS.BOOKINGS),
-                    where('stationId', '==', stationId),
-                    where('status', 'in', ['waiting', 'eligible', 'checked_in', 'fueling']),
-                    orderBy('queuePosition', 'asc')
-                )
-            );
-            const freshBookings = freshSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const freshBookings = await fetchActiveBookings(stationId);
             await notifyBatch(freshBookings, GATE_START, GATE_END, stationId);
         }
 

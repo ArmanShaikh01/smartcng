@@ -102,7 +102,10 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                     setIsWithinRadius(false);
                 }
             },
-            () => { /* GPS error — button stays disabled */ },
+            () => {
+                // GPS error — show a message but keep button accessible (fresh GPS check happens on click)
+                setCheckInError('GPS signal weak. Move to open area and try again.');
+            },
             { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
         );
 
@@ -132,7 +135,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
                     clearInterval(countdownTimerRef.current);
                     setCountdown(0);
                     // Auto-cancel
-                    cancelBooking(booking.id, booking.customerId).then(r => {
+                    cancelBooking(booking.id, booking.customerId, booking.stationId).then(r => {
                         if (r.success) onBookingCancelled();
                     });
                 } else {
@@ -187,7 +190,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
         });
         if (!ok) return;
         setCancelling(true);
-        const result = await cancelBooking(liveBooking.id, liveBooking.customerId);
+        const result = await cancelBooking(liveBooking.id, liveBooking.customerId, liveBooking.stationId);
         if (result.success) {
             onBookingCancelled();
         } else {
@@ -369,7 +372,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             )}
 
             {/* ── Always-visible Check-in Button (above countdown) ── */}
-            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+            {(liveBooking.status === 'eligible' || (liveBooking.status === 'waiting' && liveBooking.queuePosition <= 15)) && !liveBooking.isCheckedIn && (
                 <div className="checkin-inline-card">
                     <div className="checkin-inline-header">
                         <span className="checkin-inline-icon">{isWithinRadius ? '✅' : '📍'}</span>
@@ -414,7 +417,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             )}
 
             {/* ── Countdown timer ── */}
-            {countdown !== null && countdown > 0 && liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+            {countdown !== null && countdown > 0 && (liveBooking.status === 'eligible' || liveBooking.status === 'waiting') && !liveBooking.isCheckedIn && (
                 <div className="check-in-urgency" style={{
                     background: countdown < 120 ? '#fef2f2' : '#fef9ec',
                     border: `1.5px solid ${countdown < 120 ? '#fca5a5' : '#fcd34d'}`,
@@ -434,7 +437,7 @@ const MyBooking = ({ booking, onBookingCancelled }) => {
             )}
 
             {/* ── Check-in reminder ── */}
-            {liveBooking.status === 'eligible' && !liveBooking.isCheckedIn && (
+            {(liveBooking.status === 'eligible' || (liveBooking.status === 'waiting' && liveBooking.queuePosition <= 15)) && !liveBooking.isCheckedIn && (
                 <div className="check-in-reminder">
                     <p>⚠️ You are now eligible to check-in. Please arrive at the station and check-in within 10 minutes.</p>
                 </div>

@@ -11,7 +11,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
-    collection, query, where, getDocs, Timestamp
+    collection, query, where, getDocs
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { COLLECTIONS } from '../firebase/firestore';
@@ -36,39 +36,30 @@ export const useWaitTime = (stationId, queuePosition, customerId, bookingId) => 
         if (!stationId || !queuePosition) return;
 
         try {
-            // 1. Count active vehicles ahead of current user
-            const activeSnap = await getDocs(
-                query(
-                    collection(db, COLLECTIONS.BOOKINGS),
-                    where('stationId', '==', stationId),
-                    where('status', 'in', ['fueling', 'checked_in', 'eligible', 'waiting']),
-                    where('queuePosition', '<', queuePosition)
-                )
+            // Single query — filter status & position in JS (no composite index needed)
+            const snap = await getDocs(
+                query(collection(db, COLLECTIONS.BOOKINGS), where('stationId', '==', stationId))
             );
-            const ahead = activeSnap.size;
+            const all = snap.docs.map(d => d.data());
+
+            // 1. Count active vehicles ahead of current user
+            const ACTIVE = ['fueling', 'checked_in', 'eligible', 'waiting'];
+            const ahead = all.filter(
+                b => ACTIVE.includes(b.status) && (b.queuePosition || 0) < queuePosition
+            ).length;
             setVehiclesAhead(ahead);
 
-            // 2. Compute avg refill time from last 3 days completed bookings
-            const threeDaysAgo = Timestamp.fromMillis(Date.now() - 3 * 24 * 60 * 60 * 1000);
-            const completedSnap = await getDocs(
-                query(
-                    collection(db, COLLECTIONS.BOOKINGS),
-                    where('stationId', '==', stationId),
-                    where('status', '==', 'completed'),
-                    where('completedAt', '>=', threeDaysAgo)
-                )
-            );
-
+            // 2. Compute avg refill time from last 3 days completed bookings (JS filter)
+            const threeDaysAgo = Date.now() - 3 * 24 * 60 * 60 * 1000;
             let totalMs = 0, count = 0;
-            completedSnap.forEach(d => {
-                const { fuelingStartedAt, completedAt } = d.data();
-                if (fuelingStartedAt?.toMillis && completedAt?.toMillis) {
-                    const diff = completedAt.toMillis() - fuelingStartedAt.toMillis();
-                    if (diff > 0 && diff < 30 * 60 * 1000) { // sanity: < 30 min
-                        totalMs += diff;
-                        count++;
-                    }
-                }
+            all.forEach(b => {
+                if (b.status !== 'completed') return;
+                const completedMs = b.completedAt?.toMillis?.() ?? b.completedAt?.seconds * 1000;
+                if (!completedMs || completedMs < threeDaysAgo) return;
+                const startMs = b.fuelingStartedAt?.toMillis?.() ?? b.fuelingStartedAt?.seconds * 1000;
+                if (!startMs) return;
+                const diff = completedMs - startMs;
+                if (diff > 0 && diff < 30 * 60 * 1000) { totalMs += diff; count++; }
             });
 
             const avgMin = count > 0
@@ -76,7 +67,7 @@ export const useWaitTime = (stationId, queuePosition, customerId, bookingId) => 
                 : DEFAULT_REFILL_MIN;
             setAvgRefillMin(avgMin);
 
-            // 3. Compute total wait
+            // 3. Total wait
             const wait = ahead * avgMin;
             setWaitMinutes(wait);
 
